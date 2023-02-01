@@ -8,7 +8,9 @@
                 "/Zi",
                 "/EHsc",
                 "/nologo",
-                "/Fe${fileDirname}\\${fileBasenameNoExtension}.exe",
+                "/Fe${fileDirname}\\bin\\${fileBasenameNoExtension}.exe",
+                "/Fd${fileDirname}\\obj\\vc140.pdb",
+                "/Fo${fileDirname}\\obj\\${fileBasenameNoExtension}.obj",
                 "${file}"
             ],
             "options": {
