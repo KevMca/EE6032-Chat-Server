@@ -5,12 +5,15 @@
             "label": "C/C++: cl.exe build active file",
             "command": "cl.exe",
             "args": [
-                "/Zi",
+                "/FS",
                 "/EHsc",
                 "/nologo",
-                "/Fe${fileDirname}\\bin\\${fileBasenameNoExtension}.exe",
-                "/Fd${fileDirname}\\obj\\vc140.pdb",
-                "/Fo${fileDirname}\\obj\\${fileBasenameNoExtension}.obj",
+                "/Fe:",
+                "${fileDirname}\\bin\\${fileBasenameNoExtension}.exe",
+                "/Fd:",
+                "${fileDirname}\\obj\\vc140.pdb",
+                "/Fo:",
+                "${fileDirname}\\obj\\${fileBasenameNoExtension}.obj",
                 "${file}"
             ],
             "options": {
