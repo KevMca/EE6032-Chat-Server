@@ -46,7 +46,7 @@ int main(int argc, char const* argv[])
     // Creating IPv4 socket object 
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == INVALID_SOCKET) {
-        printf("Server socket setup failed with error: %d\n", serverSocket);
+        printf("Server socket setup failed with error: %d\n", (int)serverSocket);
         return 1;
     }
  
@@ -79,7 +79,7 @@ int main(int argc, char const* argv[])
     // Accept the first connection on the queue and setup socket connection
     clientSocket = accept(serverSocket, (struct sockaddr*)&serverAddress, (int *)&addrlen);
     if (clientSocket == INVALID_SOCKET) {
-        printf("Client socket setup failed with error: %d\n", clientSocket);
+        printf("Client socket setup failed with error: %d\n", (int)clientSocket);
         return 1;
     }
     printf("Connection made.\n");
@@ -89,12 +89,14 @@ int main(int argc, char const* argv[])
     printf("From client: %s\n", buffer);
 
     // Send return message
-    send(clientSocket, hello, strlen(hello), 0);
+    send(clientSocket, hello, (int)strlen(hello), 0);
     printf("From me: %s\n", hello);
  
     // Closing the connected socket
     closesocket(clientSocket);
     // Closing the listening socket
     shutdown(serverSocket, SD_BOTH);
+
+    system("pause");
     return 0;
 }
