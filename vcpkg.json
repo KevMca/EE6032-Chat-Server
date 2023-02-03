@@ -1,0 +1,7 @@
+{
+    "name": "chatserver",
+    "version-string": "1.0",
+    "dependencies": [
+        "cryptopp"
+    ]
+}
