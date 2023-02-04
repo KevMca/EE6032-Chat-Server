@@ -17,14 +17,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-// Crypto libraries
-#include <iostream>
-#include <iomanip>
-
-#include <cryptopp/modes.h>
-#include <cryptopp/aes.h>
-#include <cryptopp/filters.h>
-
 #define DEFAULT_BUFLEN 1024
 #define PORT 8080
 
