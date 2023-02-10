@@ -31,7 +31,7 @@ class Server {
     public:
         CryptoPP::RSA::PublicKey publicKey;
         struct sockaddr_in serverAddress;
-        unsigned int keySize = 3072;
+        unsigned int keySize = 2048;
         int nBacklog = 3;
         std::string name = "Server";
 

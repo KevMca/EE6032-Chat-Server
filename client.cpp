@@ -31,7 +31,7 @@ class Client {
     public:
         CryptoPP::RSA::PublicKey publicKey;
         struct sockaddr_in serverAddress;
-        unsigned int keySize = 3072;
+        unsigned int keySize = 2048;
         std::string name;
 
         Client(std::string _name);
@@ -43,7 +43,6 @@ class Client {
     private:
         CryptoPP::AutoSeededRandomPool rng;
         CryptoPP::RSA::PrivateKey privateKey;
-        CryptoPP::InvertibleRSAFunction params;
         WSADATA wsaData;
         SOCKET serverSocket = INVALID_SOCKET; 
         int addrlen = sizeof(serverAddress);
@@ -64,7 +63,7 @@ int Client::start(void)
     int err;
 
     // Generate public and private keys
-    //err = createKeys();
+    err = createKeys();
 
     // Initialize Winsock
     err = WSAStartup(MAKEWORD(2,2), &wsaData);
@@ -116,10 +115,8 @@ int Client::sendServer(const char *msg)
 int Client::createKeys(void)
 {
     // Generate keys
-    params.GenerateRandomWithKeySize(rng, keySize);
-    CryptoPP::RSA::PrivateKey _privateKey(params);
-    CryptoPP::RSA::PublicKey _publicKey(params);
-    privateKey = _privateKey;
+    privateKey.GenerateRandomWithKeySize(rng, keySize);
+    CryptoPP::RSA::PublicKey _publicKey(privateKey);
     publicKey = _publicKey;
 
     // Generate certificate

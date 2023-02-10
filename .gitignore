@@ -1,5 +1,7 @@
 build/
+cryptopp-pem/
 *.exe
 *.obj
 *.pdb
+*.der
 .vscode
