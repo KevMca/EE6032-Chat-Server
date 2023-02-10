@@ -1,14 +1,22 @@
+// Source file for creating certificates and manipulating their keys
+//
+// Sources:
 // https://stackoverflow.com/questions/12416175/loading-and-saving-vectors-to-a-file
+
+// Cryptography includes
 #include <cryptopp/cryptlib.h>
 #include <cryptopp/rsa.h>
 #include <cryptopp/sha.h>
 #include <cryptopp/hex.h>
 #include <cryptopp/files.h>
 #include <cryptopp/osrng.h>
+
+// Local includes
 #include "cert.h"
 #include "encryption.h"
 
-// Public
+/* Constructors */
+
 
 Certificate::Certificate(std::string subjectName)
 {
@@ -28,7 +36,7 @@ Certificate::Certificate(const char *fileName)
         this->readString(in, publicKeyString);
         this->readString(in, this->signature);
 
-        this->publicKey = stringToPublicKey(publicKeyString);
+        this->publicKey = stringToKey<RSA::PublicKey>(publicKeyString);
 
         in.close();
     }
@@ -38,80 +46,29 @@ Certificate::Certificate(const char *fileName)
     }
 }
 
-template <typename T>
-int Certificate::saveKey(T key, const char *fileName)
+
+/* Instance functions */
+
+
+void Certificate::save(const char *fileName)
 {
     using namespace CryptoPP;
 
-    FileSink output(fileName);
-    key.DEREncode(output);
+    try
+    {
+        std::ofstream out(fileName, std::ios::trunc);
+        std::string publicKeyString = this->keyToString<RSA::PublicKey>(this->publicKey);
 
-    return 0;
-}
-template int Certificate::saveKey<CryptoPP::RSA::PublicKey>(CryptoPP::RSA::PublicKey key, const char *fileName);
-template int Certificate::saveKey<CryptoPP::RSA::PrivateKey>(CryptoPP::RSA::PrivateKey key, const char *fileName);
+        this->writeString(out, subjectName);
+        this->writeString(out, publicKeyString);
+        this->writeString(out, signature);
 
-template <typename T>
-T Certificate::readKey(const char *fileName)
-{
-    using namespace CryptoPP;
-
-    T key;
-
-    FileSource input(fileName, true);
-    key.BERDecode(input);
-
-    return key;
-}
-template CryptoPP::RSA::PublicKey Certificate::readKey<CryptoPP::RSA::PublicKey>(const char *fileName);
-template CryptoPP::RSA::PrivateKey Certificate::readKey<CryptoPP::RSA::PrivateKey>(const char *fileName);
-
-int Certificate::printPrivateKey(CryptoPP::RSA::PrivateKey privateKey)
-{
-    using namespace CryptoPP;
-
-    HexEncoder encoder(new CryptoPP::FileSink(std::cout));
-
-    ByteQueue queue;
-    privateKey.Save(queue);
-    queue.TransferTo(encoder);
-    std::cout << std::endl;
-
-    return 0;
-}
-
-int Certificate::printPublicKey(CryptoPP::RSA::PublicKey publicKey)
-{
-    using namespace CryptoPP;
-
-    HexEncoder encoder(new CryptoPP::FileSink(std::cout));
-
-    ByteQueue queue;
-    publicKey.Save(queue);
-    queue.TransferTo(encoder);
-    std::cout << std::endl;
-
-    return 0;
-}
-
-int Certificate::save(const char *fileName)
-{
-    using namespace CryptoPP;
-    std::ofstream out(fileName, std::ios::trunc);
-
-    // Write subjectName
-    this->writeString(out, subjectName);
-
-    // Write publicKey
-    std::string publicKeyString = this->keyToString<RSA::PublicKey>(this->publicKey);
-    this->writeString(out, publicKeyString);
-
-    // Write signature
-    this->writeString(out, signature);
-
-    out.close();
-
-    return 0;
+        out.close();
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+    }
 }
 
 CryptoPP::RSA::PrivateKey Certificate::createKeys(unsigned int keySize)
@@ -122,13 +79,14 @@ CryptoPP::RSA::PrivateKey Certificate::createKeys(unsigned int keySize)
 
     RSA::PrivateKey privateKey;
     privateKey.GenerateRandomWithKeySize(rng, keySize);
-    RSA::PublicKey pKey(privateKey);
-    this->publicKey = pKey;
+
+    RSA::PublicKey publicKey(privateKey);
+    this->publicKey = publicKey;
 
     return privateKey;
 }
 
-int Certificate::sign(CryptoPP::RSA::PrivateKey privateCAKey)
+void Certificate::sign(CryptoPP::RSA::PrivateKey privateCAKey)
 {
     using namespace CryptoPP;
 
@@ -139,15 +97,13 @@ int Certificate::sign(CryptoPP::RSA::PrivateKey privateCAKey)
     std::string signature;
     Encryption::sign(contents, signature, privateCAKey);
 
-    // Remove the start from the signature
+    // Remove contents from the signature
     signature.erase(0, contents.length());
 
     // Convert to hex
     StringSource ss(signature, true,
         new HexEncoder( new StringSink(this->signature) )
     );
-
-    return 0;
 }
 
 bool Certificate::verify(CryptoPP::RSA::PublicKey publicCAKey)
@@ -163,17 +119,100 @@ bool Certificate::verify(CryptoPP::RSA::PublicKey publicCAKey)
         new HexDecoder( new StringSink(sigString) )
     );
 
+    // Append signature to contents
     std::string sig = contents;
     sig.insert( sig.end(), sigString.begin(), sigString.end() );
 
-    // Verify the contents
+    // Verify the signature and contents
     std::string recovered;
     bool result = Encryption::verify(sig, recovered, publicCAKey);
     
     return result;
 }
 
-// Private
+
+/* Static key functions */
+
+
+template <typename T>
+void Certificate::saveKey(T key, const char *fileName)
+{
+    using namespace CryptoPP;
+
+    try
+    {
+        FileSink output(fileName);
+        key.DEREncode(output);
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+    }
+}
+
+template <typename T>
+T Certificate::readKey(const char *fileName)
+{
+    using namespace CryptoPP;
+
+    T key;
+
+    try
+    {
+        FileSource input(fileName, true);
+        key.BERDecode(input);
+    }
+    catch(const std::exception& e)
+    {
+        std::cerr << e.what() << '\n';
+    }
+
+    return key;
+}
+
+template <typename T>
+std::string Certificate::keyToString(T key)
+{
+    using namespace CryptoPP;
+
+    std::string keyString;
+    HexEncoder encoder(new StringSink(keyString));
+
+    ByteQueue keyBytes;
+    key.DEREncode(keyBytes);
+    keyBytes.TransferTo(encoder);
+
+    return keyString;
+}
+
+template <typename T>
+T Certificate::stringToKey(std::string keyString)
+{
+    using namespace CryptoPP;
+
+    std::string keyDecoded;
+    T key;
+
+    HexDecoder decoder(new StringSink(keyDecoded));
+    decoder.Put( (byte*)keyString.data(), keyString.size() );
+    decoder.MessageEnd();
+
+    StringSource ss(keyDecoded, true);
+    key.BERDecode(ss);
+
+    return key;
+}
+
+template <typename T>
+void Certificate::printKey(T key)
+{
+    std::string keyString = keyToString<T>(key);
+    std::cout << keyString << std::endl;
+}
+
+
+/* Private */
+
 
 void Certificate::writeString(std::ostream &out, const std::string &data)
 {
@@ -193,45 +232,10 @@ void Certificate::readString(std::istream &in, std::string &data)
     }
 }
 
-template <typename T>
-std::string Certificate::keyToString(T key)
-{
-    using namespace CryptoPP;
-
-    std::string keyString;
-    HexEncoder encoder(new StringSink(keyString));
-
-    ByteQueue keyBytes;
-    key.DEREncode(keyBytes);
-    keyBytes.TransferTo(encoder);
-
-    return keyString;
-}
-template std::string Certificate::keyToString<CryptoPP::RSA::PublicKey>(CryptoPP::RSA::PublicKey key);
-template std::string Certificate::keyToString<CryptoPP::RSA::PrivateKey>(CryptoPP::RSA::PrivateKey key);
-
-CryptoPP::RSA::PublicKey Certificate::stringToPublicKey(std::string publicKeyString)
-{
-    using namespace CryptoPP;
-
-    // Decode string
-    std::string publicKeyDecoded;
-    HexDecoder decoder(new StringSink(publicKeyDecoded));
-    decoder.Put( (byte*)publicKeyString.data(), publicKeyString.size() );
-    decoder.MessageEnd();
-
-    RSA::PublicKey publicKey;
-    StringSource stringSource(publicKeyDecoded, true);
-    publicKey.BERDecode(stringSource);
-
-    return publicKey;
-}
-
 std::string Certificate::contentsToString(void)
 {
     using namespace CryptoPP;
 
-    // Convert public key to string
     std::string publicKeyString = this->keyToString<RSA::PublicKey>(this->publicKey);
 
     // Concatenate subjectName and publicKeyString
@@ -240,3 +244,18 @@ std::string Certificate::contentsToString(void)
 
     return out;
 }
+
+
+/* Templates */
+
+
+template void Certificate::saveKey<CryptoPP::RSA::PublicKey>(CryptoPP::RSA::PublicKey key, const char *fileName);
+template void Certificate::saveKey<CryptoPP::RSA::PrivateKey>(CryptoPP::RSA::PrivateKey key, const char *fileName);
+template CryptoPP::RSA::PublicKey Certificate::readKey<CryptoPP::RSA::PublicKey>(const char *fileName);
+template CryptoPP::RSA::PrivateKey Certificate::readKey<CryptoPP::RSA::PrivateKey>(const char *fileName);
+template std::string Certificate::keyToString<CryptoPP::RSA::PublicKey>(CryptoPP::RSA::PublicKey key);
+template std::string Certificate::keyToString<CryptoPP::RSA::PrivateKey>(CryptoPP::RSA::PrivateKey key);
+template CryptoPP::RSA::PublicKey Certificate::stringToKey<CryptoPP::RSA::PublicKey>(std::string keyString);
+template CryptoPP::RSA::PrivateKey Certificate::stringToKey<CryptoPP::RSA::PrivateKey>(std::string keyString);
+template void Certificate::printKey<CryptoPP::RSA::PublicKey>(CryptoPP::RSA::PublicKey key);
+template void Certificate::printKey<CryptoPP::RSA::PrivateKey>(CryptoPP::RSA::PrivateKey key);

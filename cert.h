@@ -1,3 +1,9 @@
+// Header file for creating certificates and manipulating their keys
+//
+// Sources:
+// 
+
+// Cryptography includes
 #include <cryptopp/cryptlib.h>
 #include <cryptopp/rsa.h>
 #include <cryptopp/sha.h>
@@ -27,58 +33,58 @@ class Certificate {
         // Inputs -> fileName: the location where the certificate is stored
         explicit Certificate(const char *fileName);
 
-        /* Functions */
-
-        // Saves a private RSA key to a byte file
-        // Inputs -> key: either a public key or private key object
-        //           fileName: the file location to save the key to
-        // Returns -> 0 if no errors
-        template< typename T>
-        static int saveKey(T key, const char *fileName);
-
-        // Reads a private RSA key from a byte file
-        // Inputs -> fileName: the file location to save the key to
-        // Outputs -> key: either a public key or private key object
-        template< typename T>
-        static T readKey(const char *fileName);
-
-        // Prints a private key in hex format
-        // Inputs -> privateKey: complimentary private RSA key
-        // Returns -> 0 if no errors
-        static int printPrivateKey(CryptoPP::RSA::PrivateKey privateKey);
-
-        // Prints a public key in hex format
-        // Inputs -> publicKey: complimentary public RSA key
-        // Returns -> 0 if no errors
-        static int printPublicKey(CryptoPP::RSA::PublicKey publicKey);
+        /* Instance functions */
 
         // Saves the certificate to a byte file
-        // Inputs -> fileName: the file location to save the key to
-        // Returns -> 0 if no errors
-        int save(const char *fileName);
+        // Inputs -> fileName: the file location to save the key
+        void save(const char *fileName);
 
-        // Creates a private and public key pair given `keySize`
+        // Creates a private and public key pair with a key size given in bits
         // Inputs -> keySize: size (in bits) of the RSA key
-        // Outputs -> privateKey: complimentary private RSA key (must be deleted externally)
-        //            this->publicKey: complimentary public RSA key
-        // Returns -> 0 if no errors
+        // Outputs -> this->publicKey: public RSA key object
+        // Returns -> private RSA key object
         CryptoPP::RSA::PrivateKey createKeys(unsigned int keySize);
 
-        // Signs the certificate using a 
-        // Inputs -> privateCAKey: the private key of the certificate authority that is signing the cert
-        // Returns -> 0 if no errors
-        int sign(CryptoPP::RSA::PrivateKey privateCAKey);
+        // Signs the certificate using a private key
+        // Inputs -> CAKey: the private key of the certificate authority that is signing the cert
+        void sign(CryptoPP::RSA::PrivateKey privateCAKey);
 
         // Signs the certificate and compares against the included certificate signature.
         // Inputs -> publicCAKey: the public key of the certificate authority that signed the cert
         // Returns -> "true" if the signatures match, "false" if signatures do not match
         bool verify(CryptoPP::RSA::PublicKey publicCAKey);
 
+        /* Static key functions */
+
+        // Saves a public or private key to a byte file
+        // Inputs -> key: either a public key or private key object
+        //           fileName: the file location to save the key to
+        // Returns -> 0 if no errors
+        template< typename T>
+        static void saveKey(T key, const char *fileName);
+
+        // Reads a public or private key from a byte file
+        // Inputs -> fileName: the file location to save the key to
+        // Outputs -> key: either a public key or private key object
+        template< typename T>
+        static T readKey(const char *fileName);
+
         // Converts a public or private key to a string
         // Inputs -> key: either a public key or private key object
         // Returns -> A string representing a public or private key
         template< typename T>
         static std::string keyToString(T key);
+
+        // Converts a hex encoded string to a public or private key
+        // Inputs -> keyString: the string that contains a hex encoded public or private key
+        // Returns -> A public or private key object
+        template< typename T>
+        T stringToKey(std::string keyString);
+
+        // Prints a public or private key in hex format
+        // Inputs -> key: either a public key or private key object
+        template< typename T>
+        static void printKey(T key);
 
     private:
         // Writes a string to a file
@@ -90,11 +96,6 @@ class Certificate {
         // Inputs -> in: input filestream to read from
         // Outputs -> data: the string data that was read
         static void readString(std::istream &in, std::string &data);
-
-        // Converts a string to a public key
-        // Inputs -> publicKeyString: the string that contains a public key
-        // Returns -> A string representing a public key
-        CryptoPP::RSA::PublicKey stringToPublicKey(std::string publicKeyString);
 
         // Converts the subject name and public key to a string
         // Returns -> The combination of the subject name and public key
