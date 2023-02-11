@@ -1,69 +1,21 @@
-// Client class for communicating with server and other clients
+// Client source file for communicating with server and other clients
 //
 // Sources:
 // https://www.geeksforgeeks.org/socket-programming-cc/ (Linux server-client code base)
 // https://learn.microsoft.com/en-us/windows/win32/winsock/complete-server-code (Winsock example)
 // https://www.cryptopp.com/wiki/RSA_Cryptography
 
-// Include crypto libraries
-#include <cryptopp/cryptlib.h>
-#include <cryptopp/rsa.h>
-#include <cryptopp/osrng.h>
-#include <cryptopp/files.h>
-#include <cryptopp/hex.h>
+#include "client.h"
+#include "cert.h"
+#include "protocol.h"
 
-// Include socket libraries
-#ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x0600
-#endif
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
 
-// Include other libraries
-#include <iostream>
-#include <string>
+/* Public */
 
-#define DEFAULT_BUFLEN 1024
-
-// Client class specification
-class Client {
-    public:
-        CryptoPP::RSA::PublicKey publicKey;
-        struct sockaddr_in serverAddress;
-        unsigned int keySize = 2048;
-        std::string name;
-
-        Client(std::string _name);
-        int start(void);
-        int connectServer(char *serverIP, u_short port);
-        int readServer(char *buffer);
-        int sendServer(const char *msg);
-
-    private:
-        CryptoPP::AutoSeededRandomPool rng;
-        CryptoPP::RSA::PrivateKey privateKey;
-        WSADATA wsaData;
-        SOCKET serverSocket = INVALID_SOCKET; 
-        int addrlen = sizeof(serverAddress);
-
-        int createKeys();
-        int setupServerSocket(char *serverIP, u_short port);
-};
-
-// Public
-
-Client::Client(std::string _name)
-{
-    name = _name;
-}
 
 int Client::start(void)
 {
     int err;
-
-    // Generate public and private keys
-    err = createKeys();
 
     // Initialize Winsock
     err = WSAStartup(MAKEWORD(2,2), &wsaData);
@@ -110,21 +62,9 @@ int Client::sendServer(const char *msg)
     return 0;
 }
 
-// Private
 
-int Client::createKeys(void)
-{
-    // Generate keys
-    privateKey.GenerateRandomWithKeySize(rng, keySize);
-    CryptoPP::RSA::PublicKey _publicKey(privateKey);
-    publicKey = _publicKey;
+/* Private */
 
-    // Generate certificate
-    //cert.identity = name;
-    //cert.publicKey = 
-
-    return 0;
-}
 
 int Client::setupServerSocket(char *serverIP, u_short port)
 {
@@ -151,28 +91,25 @@ int Client::setupServerSocket(char *serverIP, u_short port)
     return 0;
 }
 
-//int Client::exchangeServerCert(void)
-//{
-//
-//    return 0;
-//}
 
-//struct clientCert{
-//    std::string identity;
-//    int publicKey;
-//};
+/* Main */
 
-// Main
 
 int main(int argc, char* argv[])
 {
     int err, nBytes;
-    char *msg = "Hello Server!";
+
+    // Certificates
+    const char *privateKeyName = "certs/server_private.der";
+    const char *publicKeyName  = "certs/server_public.der";
+    const char *publicCAName  = "certs/root_public.der";
+    
+    // IP Information
     char *serverIP = "127.0.0.1";
     u_short port = 8080;
     char buffer[DEFAULT_BUFLEN] = { 0 };
 
-    Client alice("Alice");
+    Client alice;
     std::cout << "Alice\n ----------" << std::endl;
 
     err = alice.start();
@@ -183,12 +120,14 @@ int main(int argc, char* argv[])
     if (err != 0) { return 1; }
     std::cout << "Connected to server" << std::endl;
 
-    err = alice.sendServer(msg);
+    // Send certificate
+
+    /*err = alice.sendServer(msg);
     if (err != 0) { return 1; }
     std::cout << "From me: " << msg << std::endl;
 
     nBytes = alice.readServer(buffer);
-    std::cout << "From server: " << buffer << std::endl;
+    std::cout << "From server: " << buffer << std::endl;*/
 
     system("pause");
     return 0;

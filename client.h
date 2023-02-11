@@ -1,4 +1,4 @@
-// Server header file for communicating with clients
+// Client header file for communicating with server and other clients
 //
 // Sources:
 // https://www.geeksforgeeks.org/socket-programming-cc/ (Linux server-client code base)
@@ -20,42 +20,45 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
-// Server class specification
+// Client class specification
 // Example:
-//     Server server;
-//     int err = server.start(serverIP, port);
+//     Client alice;
+//     int err = alice.start();
 //     if (err != 0) { return 1; }
-//     err = server.acceptClient();
+//     err = server.connectServer(serverIP, port);
 //     if (err != 0) { return 1; }
-class Server {
+class Client {
     public:
         struct sockaddr_in serverAddress;
-        int nBacklog = 3;
-        std::string name = "Server";
 
-        // Starts the server socket and attaches to port and address
+        // Starts the client socket
+        // Returns -> 0 if no errors, 1 if there was an error
+        int start(void);
+
+        // Connects to a server with a specific IP address and port
         // Inputs -> serverIP: the IP address of the server
-        //           port: the port of the server
+        //           port: the port number of the server
         // Returns -> 0 if no errors, 1 if there was an error
-        int start(char *serverIP, u_short port);
+        int connectServer(char *serverIP, u_short port);
 
-        // Listens on the specified port and connects to the first client that tries to connect
-        // Returns -> 0 if no errors, 1 if there was an error
-        int connectClient(void);
-
-        // Reads any messages from the attached client
+        // Reads any messages from the attached server
         // Inputs -> buffer: the buffer to read into
         // Returns -> the number of bytes read
-        int readClient(char *buffer);
+        int readServer(char *buffer);
 
-        // Sends a message to the attached client
+        // Sends a message to the attached server
         // Inputs -> msg: the message to send
         // Returns -> the number of bytes sent
-        int sendClient(const char *msg);
+        int sendServer(const char *msg);
 
     private:
         WSADATA wsaData;
-        SOCKET serverSocket = INVALID_SOCKET;
-        SOCKET clientSocket = INVALID_SOCKET;
+        SOCKET serverSocket = INVALID_SOCKET; 
         int addrlen = sizeof(serverAddress);
+
+        // Connects to a server with a specific IP address and port
+        // Inputs -> serverIP: the IP address of the server
+        //           port: the port number of the server
+        // Returns -> 0 if no errors, 1 if there was an error
+        int setupServerSocket(char *serverIP, u_short port);
 };

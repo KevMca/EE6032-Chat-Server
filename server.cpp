@@ -6,18 +6,17 @@
 // https://www.cryptopp.com/wiki/RSA_Cryptography
 
 #include "server.h"
+#include "cert.h"
+#include "protocol.h"
 
-#define DEFAULT_BUFLEN 1024
 
-// Public
+/* Public */
+
 
 int Server::start(char *serverIP, u_short port)
 {
     int err;
     char opt = 1;
-
-    // Generate public and private keys
-    //err = createKeys();
 
     // Initialize Winsock
     err = WSAStartup(MAKEWORD(2,2), &wsaData);
@@ -54,7 +53,7 @@ int Server::start(char *serverIP, u_short port)
     return 0;
 }
 
-int Server::acceptClient(void)
+int Server::connectClient(void)
 {
     int err;
 
@@ -77,7 +76,6 @@ int Server::acceptClient(void)
 
 int Server::readClient(char *buffer)
 {
-    // Read in buffer
     int nBytes = recv(clientSocket, buffer, DEFAULT_BUFLEN, 0);
 
     return nBytes;
@@ -85,34 +83,25 @@ int Server::readClient(char *buffer)
 
 int Server::sendClient(const char *msg)
 {
-    // Send message to server
-    send(clientSocket, msg, (int)strlen(msg), 0);
+    int nBytes = send(clientSocket, msg, (int)strlen(msg), 0);
 
-    return 0;
+    return nBytes;
 }
 
-// Private
 
-int Server::createKeys(void)
-{
-    // Generate keys
-    params.GenerateRandomWithKeySize(rng, keySize);
-    CryptoPP::RSA::PrivateKey _privateKey(params);
-    CryptoPP::RSA::PublicKey _publicKey(params);
-    privateKey = _privateKey;
-    publicKey = _publicKey;
+/* Main */
 
-    // Generate certificate
-    //cert.identity = name;
-    //cert.publicKey = 
-
-    return 0;
-}
 
 int main(int argc, char* argv[])
 {
     int err, nBytes;
-    char *msg = "Hello Client!";
+
+    // Certificates
+    const char *privateKeyName = "certs/alice_private.der";
+    const char *publicKeyName  = "certs/alice_public.der";
+    const char *publicCAName  = "certs/root_public.der";
+
+    // IP Information
     char *serverIP = "127.0.0.1";
     u_short port = 8080;
     char buffer[DEFAULT_BUFLEN] = { 0 };
@@ -124,16 +113,18 @@ int main(int argc, char* argv[])
     if (err != 0) { return 1; }
     std::cout << "Server started" << std::endl;
 
-    err = server.acceptClient();
+    err = server.connectClient();
     if (err != 0) { return 1; }
     std::cout << "Client accepted" << std::endl;
 
-    nBytes = server.readClient(buffer);
+    // Read certificate
+
+    /*nBytes = server.readClient(buffer);
     std::cout << "From client: " << buffer << std::endl;
 
     err = server.sendClient(msg);
     if (err != 0) { return 1; }
-    std::cout << "From me: " << msg << std::endl;
+    std::cout << "From me: " << msg << std::endl;*/
 
     system("pause");
     return 0;

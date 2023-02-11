@@ -1,1 +1,2 @@
-.\build\Debug\cert_exchange.exe
+start .\build\Debug\server.exe
+start .\build\Debug\client.exe
