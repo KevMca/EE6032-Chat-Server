@@ -3,6 +3,9 @@
 // Sources:
 // 
 
+#ifndef CERT_H
+#define CERT_H
+
 // Cryptography includes
 #include <cryptopp/cryptlib.h>
 #include <cryptopp/rsa.h>
@@ -16,13 +19,16 @@
 //      Certificate cert(subjectName);
 //      CryptoPP::RSA::PrivateKey privateKey = cert.createKeys(2048);
 //      cert.sign(CAKey);
-class Certificate {
+class Certificate 
+{
     public:
         std::string subjectName;
         CryptoPP::RSA::PublicKey publicKey;
         std::string signature;
 
         /* Constructors */
+
+        explicit Certificate();
 
         // Construct certificate with subject name only, usually new keys are generated using the
         // createKeys() function and then signed with the sign() function
@@ -53,6 +59,10 @@ class Certificate {
         // Inputs -> publicCAKey: the public key of the certificate authority that signed the cert
         // Returns -> "true" if the signatures match, "false" if signatures do not match
         bool verify(CryptoPP::RSA::PublicKey publicCAKey);
+
+        // Converts the entire certificate to a hex encoded string
+        // Returns -> the hex encoded string representation of the certificate
+        std::string toString(void);
 
         /* Static key functions */
 
@@ -101,3 +111,5 @@ class Certificate {
         // Returns -> The combination of the subject name and public key
         std::string contentsToString(void);
 };
+
+#endif

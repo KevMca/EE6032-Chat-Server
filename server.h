@@ -20,6 +20,8 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
+#include "protocol.h"
+
 // Server class specification
 // Example:
 //     Server server;
@@ -31,7 +33,16 @@ class Server {
     public:
         struct sockaddr_in serverAddress;
         int nBacklog = 3;
-        std::string name = "Server";
+        CryptoPP::RSA::PrivateKey privateKey;
+        Certificate cert;
+        Certificate clientCert;
+
+        Server(void);
+
+        // Constructor for server if private and public keys are known
+        // Inputs -> privateName: location of the private key file for the server
+        //           publicName: location of the public key file for the server
+        Server(const char *privateName, const char *publicName);
 
         // Starts the server socket and attaches to port and address
         // Inputs -> serverIP: the IP address of the server
@@ -41,7 +52,12 @@ class Server {
 
         // Listens on the specified port and connects to the first client that tries to connect
         // Returns -> 0 if no errors, 1 if there was an error
-        int connectClient(void);
+        int listenClient(void);
+
+        // Exchanges certificates with a client and authenticates them
+        // Inputs -> CACert: the certificate of the certificate authority
+        // Returns -> 0 if no errors, 1 if there was an error
+        int connectClient(Certificate CACert);
 
         // Reads any messages from the attached client
         // Inputs -> buffer: the buffer to read into
@@ -57,5 +73,6 @@ class Server {
         WSADATA wsaData;
         SOCKET serverSocket = INVALID_SOCKET;
         SOCKET clientSocket = INVALID_SOCKET;
+        char buffer[DEFAULT_BUFLEN] = { 0 };
         int addrlen = sizeof(serverAddress);
 };

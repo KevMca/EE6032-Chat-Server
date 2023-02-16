@@ -18,6 +18,11 @@
 /* Constructors */
 
 
+Certificate::Certificate()
+{
+    
+}
+
 Certificate::Certificate(std::string subjectName)
 {
     this->subjectName = subjectName;
@@ -128,6 +133,20 @@ bool Certificate::verify(CryptoPP::RSA::PublicKey publicCAKey)
     bool result = Encryption::verify(sig, recovered, publicCAKey);
     
     return result;
+}
+
+std::string Certificate::toString(void)
+{
+    using namespace CryptoPP;
+
+    // Convert subject name and public key to string
+    std::string contents = this->contentsToString();
+
+    // Append signature string
+    std::string certString = contents;
+    certString.insert( certString.end(), signature.begin(), signature.end() );
+    
+    return certString;
 }
 
 

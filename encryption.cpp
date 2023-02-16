@@ -5,7 +5,20 @@
 #include <cryptopp/filters.h>
 #include "encryption.h"
 
-int Encryption::encrypt(std::string &plain, std::string &cipher, CryptoPP::RSA::PublicKey publicKey)
+std::string Encryption::generateNonce(size_t size)
+{
+    using namespace CryptoPP;
+
+    SecByteBlock nonce(size);
+    AutoSeededRandomPool prng;
+
+    prng.GenerateBlock(nonce, nonce.size());
+
+    std::string nonceString(reinterpret_cast<const char*>(&nonce[0]), nonce.size());
+    return nonceString;
+}
+
+void Encryption::encrypt(std::string &plain, std::string &cipher, CryptoPP::RSA::PublicKey publicKey)
 {
     using namespace CryptoPP;
 
@@ -16,11 +29,9 @@ int Encryption::encrypt(std::string &plain, std::string &cipher, CryptoPP::RSA::
     StringSource ss1(plain, true,
         new PK_EncryptorFilter(rng, e, new StringSink(cipher))
     );
-
-    return 0;
 }
 
-int Encryption::decrypt(std::string &cipher, std::string &recovered, CryptoPP::RSA::PrivateKey privateKey)
+void Encryption::decrypt(std::string &cipher, std::string &recovered, CryptoPP::RSA::PrivateKey privateKey)
 {
     using namespace CryptoPP;
 
@@ -31,8 +42,6 @@ int Encryption::decrypt(std::string &cipher, std::string &recovered, CryptoPP::R
     StringSource ss2(cipher, true,
         new PK_DecryptorFilter(rng, d, new StringSink(recovered))
     );
-
-    return 0;
 }
 
 int Encryption::sign(std::string &plain, std::string &signature, CryptoPP::RSA::PrivateKey privateKey)

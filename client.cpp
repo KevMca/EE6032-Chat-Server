@@ -6,12 +6,22 @@
 // https://www.cryptopp.com/wiki/RSA_Cryptography
 
 #include "client.h"
-#include "cert.h"
-#include "protocol.h"
 
 
 /* Public */
 
+
+Client::Client(void)
+{
+
+}
+
+Client::Client(const char *privateName, const char *publicName)
+{
+    Certificate cert(publicName);
+    this->cert = cert;
+    privateKey = Certificate::readKey<CryptoPP::RSA::PrivateKey>(privateName);
+}
 
 int Client::start(void)
 {
@@ -34,21 +44,53 @@ int Client::start(void)
     return 0;
 }
 
-int Client::connectServer(char *serverIP, u_short port)
+int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
 {
-    int err;
+    int err, nBytes;
 
     err = setupServerSocket(serverIP, port);
     if (err != 0) {
         return 1;
     }
 
+    // 1 Send client certificate
+    CertMSG clientCertMsg(cert);
+
+    nBytes = sendServer(clientCertMsg.serialize().c_str());
+    if (nBytes == 0) {
+        std::cerr << "Client certificate could not be sent" << std::endl;
+        return 1;
+    }
+
+    // 2(a) Receive server certificate
+    nBytes = readServer(buffer);
+    if (nBytes == 0) {
+        std::cerr << "Server certificate could not be read" << std::endl;
+        return 1;
+    }
+    
+    CertMSG recvCertMsg;
+    recvCertMsg.deserialize(buffer);
+    recvCertMsg.decryptNonce(privateKey);
+
+    // 2(b) Verify certificate
+    bool isVerified = recvCertMsg.cert.verify(CACert.publicKey);
+    if (isVerified == false) {
+        std::cerr << "Certificate did not match CA" << std::endl;
+        return 1;
+    }
+
+    // 3 Send challenge-response
+
+    // 4(a) Read response
+
+    // 4(b) Verify response
+
     return 0;
 }
 
 int Client::readServer(char *buffer)
 {
-    // Read in buffer
     int nBytes = recv(serverSocket, buffer, DEFAULT_BUFLEN, 0);
 
     return nBytes;
@@ -56,10 +98,9 @@ int Client::readServer(char *buffer)
 
 int Client::sendServer(const char *msg)
 {
-    // Send message to server
-    send(serverSocket, msg, (int)strlen(msg), 0);
+    int nBytes = send(serverSocket, msg, (int)strlen(msg), 0);
 
-    return 0;
+    return nBytes;
 }
 
 
@@ -99,35 +140,29 @@ int main(int argc, char* argv[])
 {
     int err, nBytes;
 
-    // Certificates
-    const char *privateKeyName = "certs/server_private.der";
-    const char *publicKeyName  = "certs/server_public.der";
-    const char *publicCAName  = "certs/root_public.der";
-    
     // IP Information
     char *serverIP = "127.0.0.1";
     u_short port = 8080;
     char buffer[DEFAULT_BUFLEN] = { 0 };
 
-    Client alice;
-    std::cout << "Alice\n ----------" << std::endl;
+    // Certificates
+    const char *privateName = "certs/alice_private.der";
+    const char *publicName  = "certs/alice_public.der";
+    const char *publicCAName  = "certs/root_public.der";
+    
+    // Read CA certificate
+    Certificate CACert(publicCAName);
 
-    err = alice.start();
+    Client client(privateName, publicName);
+    std::cout << client.cert.subjectName << "\n ----------" << std::endl;
+
+    err = client.start();
     if (err != 0) { return 1; }
     std::cout << "Client started" << std::endl;
 
-    err = alice.connectServer(serverIP, port);
+    err = client.connectServer(serverIP, port, CACert);
     if (err != 0) { return 1; }
     std::cout << "Connected to server" << std::endl;
-
-    // Send certificate
-
-    /*err = alice.sendServer(msg);
-    if (err != 0) { return 1; }
-    std::cout << "From me: " << msg << std::endl;
-
-    nBytes = alice.readServer(buffer);
-    std::cout << "From server: " << buffer << std::endl;*/
 
     system("pause");
     return 0;
