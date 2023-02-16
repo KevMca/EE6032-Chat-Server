@@ -18,8 +18,10 @@
 class SockMSG 
 {
     public:
-        void SockMSG::serializeString(std::ostream &out, std::string data);
-        void SockMSG::deserializeString(std::istream &in, std::string &data);
+        virtual std::string serialize(void) = 0;
+        virtual void deserialize(std::string str) = 0;
+        void serializeString(std::ostream &out, std::string data);
+        void deserializeString(std::istream &in, std::string &data);
 };
 
 // Represents a socket message including a certificate and a nonce, used for verification and 
@@ -32,7 +34,7 @@ class SockMSG
 //      CertMSG clientCertMsg;
 //      clientCertMsg.deserialize(socketMsg)
 //      clientCertMsg.decryptNonce(privateKey)
-class CertMSG: private SockMSG
+class CertMSG: public SockMSG
 {
     public:
         Certificate cert;
@@ -47,7 +49,7 @@ class CertMSG: private SockMSG
         void decryptNonce(CryptoPP::RSA::PrivateKey privateKey);
 };
 
-class AuthMSG: private SockMSG
+class AuthMSG: public SockMSG
 {
     public:
         std::string data;
