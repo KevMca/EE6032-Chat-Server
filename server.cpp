@@ -6,7 +6,6 @@
 // https://www.cryptopp.com/wiki/RSA_Cryptography
 
 #include "server.h"
-#include "cert.h"
 
 
 /* Public */
@@ -135,20 +134,6 @@ int Server::connectClient(Certificate CACert)
     // 4 Send challenge back
 
     return 0;
-}
-
-int Server::readClient(char *buffer)
-{
-    int nBytes = recv(clientSocket, buffer, DEFAULT_BUFLEN, 0);
-
-    return nBytes;
-}
-
-int Server::sendClient(const char *msg)
-{
-    int nBytes = send(clientSocket, msg, (int)strlen(msg), 0);
-
-    return nBytes;
 }
 
 

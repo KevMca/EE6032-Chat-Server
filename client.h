@@ -37,12 +37,12 @@ class Client {
         Certificate cert;
         Certificate serverCert;
 
-        Client(void);
+        explicit Client(void);
 
         // Constructor for client if private and public keys are known
         // Inputs -> privateName: location of the private key file for the client
         //           publicName: location of the public key file for the client
-        Client(const char *privateName, const char *publicName);
+        explicit Client(const char *privateName, const char *publicName);
 
         // Starts the client socket
         // Returns -> 0 if no errors, 1 if there was an error
@@ -55,20 +55,9 @@ class Client {
         // Returns -> 0 if no errors, 1 if there was an error
         int connectServer(char *serverIP, u_short port, Certificate CACert);
 
-        // Reads any messages from the attached server
-        // Inputs -> buffer: the buffer to read into
-        // Returns -> the number of bytes read
-        int readServer(char *buffer);
-
-        // Sends a message to the attached server
-        // Inputs -> msg: the message to send
-        // Returns -> the number of bytes sent
-        int sendServer(const char *msg);
-
     private:
         WSADATA wsaData;
-        SOCKET serverSocket = INVALID_SOCKET; 
-        char buffer[DEFAULT_BUFLEN] = { 0 };
+        SOCKET serverSocket = INVALID_SOCKET;
         int addrlen = sizeof(serverAddress);
 
         // Connects to a server with a specific IP address and port

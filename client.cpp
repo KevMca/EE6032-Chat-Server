@@ -101,20 +101,6 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     return 0;
 }
 
-int Client::readServer(char *buffer)
-{
-    int nBytes = recv(serverSocket, buffer, DEFAULT_BUFLEN, 0);
-
-    return nBytes;
-}
-
-int Client::sendServer(const char *msg)
-{
-    int nBytes = send(serverSocket, msg, (int)strlen(msg), 0);
-
-    return nBytes;
-}
-
 
 /* Private */
 
