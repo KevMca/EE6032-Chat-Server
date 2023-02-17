@@ -23,6 +23,24 @@ void SockMSG::deserializeString(std::istream &in, std::string &data)
     in >> comma;
 }
 
+int SockMSG::readMSG(SOCKET socket)
+{
+    char buffer[DEFAULT_BUFLEN] = { 0 };
+    int nBytes = recv(socket, buffer, DEFAULT_BUFLEN, 0);
+    deserialize(buffer);
+
+    return nBytes;
+}
+
+int SockMSG::sendMSG(SOCKET socket)
+{
+    std::string serial = serialize();
+    const char *msg = serial.c_str();
+    int nBytes = send(socket, msg, (int)strlen(msg), 0);
+
+    return nBytes;
+}
+
 CertMSG::CertMSG()
 {
 
@@ -103,10 +121,16 @@ AuthMSG::AuthMSG()
 
 }
 
-AuthMSG::AuthMSG(std::string data, std::string signature)
+AuthMSG::AuthMSG(SockMSG *msg, CryptoPP::RSA::PrivateKey privateKey)
 {
-    this->data = data;
-    this->signature = signature;
+    this->msg = msg->serialize();
+    this->signature = createSignature(privateKey);
+}
+
+AuthMSG::AuthMSG(std::string msg, CryptoPP::RSA::PrivateKey privateKey)
+{
+    this->msg = msg;
+    this->signature = createSignature(privateKey);
 }
 
 std::string AuthMSG::serialize(void)
@@ -114,7 +138,7 @@ std::string AuthMSG::serialize(void)
     std::stringstream out;
     std::string str;
     
-    serializeString(out, data);
+    serializeString(out, msg);
     serializeString(out, signature);
 
     str = out.str();
@@ -127,6 +151,46 @@ void AuthMSG::deserialize(std::string str)
     std::stringstream in;
     in.str(str);
 
-    deserializeString(in, data);
+    deserializeString(in, msg);
     deserializeString(in, signature);
+}
+
+bool AuthMSG::verify(CryptoPP::RSA::PublicKey publicKey)
+{
+    using namespace CryptoPP;
+
+    // Convert from hex
+    std::string signatureHex;
+    StringSource ss(signature, true,
+        new HexDecoder( new StringSink(signatureHex) )
+    );
+
+    // Append signature to contents
+    std::string signedMsg = msg;
+    signedMsg.insert( signedMsg.end(), signatureHex.begin(), signatureHex.end() );
+
+    // Verify the signature and contents
+    std::string recovered;
+    bool result = Encryption::verify(signedMsg, recovered, publicKey);
+    
+    return result;
+}
+
+std::string AuthMSG::createSignature(CryptoPP::RSA::PrivateKey privateKey)
+{
+    using namespace CryptoPP;
+
+    // Sign the contents
+    std::string signature, signatureHex;
+    Encryption::sign(msg, signature, privateKey);
+
+    // Remove msg from the signature
+    signature.erase(0, msg.length());
+
+    // Convert to hex
+    StringSource ss(signature, true,
+        new HexEncoder( new StringSink(signatureHex) )
+    );
+    
+    return signatureHex;
 }

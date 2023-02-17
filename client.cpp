@@ -47,6 +47,7 @@ int Client::start(void)
 int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
 {
     int err, nBytes;
+    bool isVerified;
 
     err = setupServerSocket(serverIP, port);
     if (err != 0) {
@@ -54,27 +55,38 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     }
 
     // 1 Send client certificate
-    CertMSG clientCertMsg(cert);
+    CertMSG clientMsg(cert);
+    AuthMSG clientAuth(&clientMsg, privateKey);
 
-    nBytes = sendServer(clientCertMsg.serialize().c_str());
+    nBytes = clientAuth.sendMSG(serverSocket);
     if (nBytes == 0) {
         std::cerr << "Client certificate could not be sent" << std::endl;
         return 1;
     }
 
     // 2(a) Receive server certificate
-    nBytes = readServer(buffer);
+    CertMSG serverMsg;
+    AuthMSG serverAuth;
+    nBytes = serverAuth.readMSG(serverSocket);
     if (nBytes == 0) {
         std::cerr << "Server certificate could not be read" << std::endl;
         return 1;
     }
-    
-    CertMSG recvCertMsg;
-    recvCertMsg.deserialize(buffer);
-    recvCertMsg.decryptNonce(privateKey);
 
-    // 2(b) Verify certificate
-    bool isVerified = recvCertMsg.cert.verify(CACert.publicKey);
+    // Extract certificate
+    serverMsg.deserialize(serverAuth.msg);
+    serverMsg.decryptNonce(privateKey);
+    serverCert = serverMsg.cert;
+
+    // 2(b) Verify digital signature
+    isVerified = serverAuth.verify(serverCert.publicKey);
+    if (isVerified == false) {
+        std::cerr << "Message digital signature did not match" << std::endl;
+        return 1;
+    }
+
+    // 2(c) Verify server certificate
+    isVerified = serverMsg.cert.verify(CACert.publicKey);
     if (isVerified == false) {
         std::cerr << "Certificate did not match CA" << std::endl;
         return 1;

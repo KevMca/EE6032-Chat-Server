@@ -87,31 +87,42 @@ int Server::listenClient(void)
 
 int Server::connectClient(Certificate CACert)
 {
-    int nBytes;
+    int err, nBytes;
+    bool isVerified;
     
     // 1(a) Read client certificate
-    nBytes = readClient(buffer);
+    CertMSG clientMsg;
+    AuthMSG clientAuth;
+    nBytes = clientAuth.readMSG(clientSocket);
     if (nBytes == 0) {
         std::cerr << "Client certificate could not be read" << std::endl;
         return 1;
     }
 
-    CertMSG recvCertMsg;
-    recvCertMsg.deserialize(buffer);
+    // Extract certificate
+    clientMsg.deserialize(clientAuth.msg);
+    clientCert = clientMsg.cert;
 
-    // 1(b) Verify client certificate
-    bool isVerified = recvCertMsg.cert.verify(CACert.publicKey);
+    // 1(b) Verify digital signature
+    isVerified = clientAuth.verify(clientCert.publicKey);
+    if (isVerified == false) {
+        std::cerr << "Message digital signature did not match" << std::endl;
+        return 1;
+    }
+
+    // 1(c) Verify client certificate
+    isVerified = clientMsg.cert.verify(CACert.publicKey);
     if (isVerified == false) {
         std::cerr << "Certificate did not match CA" << std::endl;
         return 1;
     }
-    clientCert = recvCertMsg.cert;
-
+    
     // 2 Send server certificate
-    CertMSG serverCertMsg(cert);
-    serverCertMsg.encryptNonce(clientCert.publicKey);
+    CertMSG serverMsg(cert);
+    serverMsg.encryptNonce(clientCert.publicKey);
+    AuthMSG serverAuth(&serverMsg, privateKey);
 
-    nBytes = sendClient(serverCertMsg.serialize().c_str());
+    nBytes = serverAuth.sendMSG(clientSocket);
     if (nBytes == 0) { 
         std::cerr << "Server certificate could not be sent" << std::endl;
         return 1; 

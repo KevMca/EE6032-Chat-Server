@@ -53,6 +53,9 @@ int Encryption::sign(std::string &plain, std::string &signature, CryptoPP::RSA::
     // Sign and Encode
     RSASS<PSS, SHA256>::Signer signer(privateKey);
 
+    // Create signature space
+    size_t length = signer.MaxSignatureLength();
+
     StringSource ss1(plain, true, 
         new SignerFilter(rng, signer,
             new StringSink(signature), true
