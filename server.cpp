@@ -4,17 +4,28 @@
 // https://www.geeksforgeeks.org/socket-programming-cc/ (Linux server-client code base)
 // https://learn.microsoft.com/en-us/windows/win32/winsock/complete-server-code (Winsock example)
 // https://www.cryptopp.com/wiki/RSA_Cryptography
+// https://www.daniweb.com/programming/software-development/threads/6811/winsock-multi-client-servers
 
 #include "server.h"
 
 
-/* Public */
+/* ClientSession */
 
 
-Server::Server(void)
+ClientSession::ClientSession(void) { }
+ClientSession::ClientSession(SOCKET socket) { this->socket = socket; }
+ClientSession::ClientSession(Certificate cert) { this->cert = cert; }
+ClientSession::ClientSession(SOCKET socket, Certificate cert)
 {
-
+    this->socket = socket;
+    this->cert   = cert;
 }
+
+
+/* Server */
+
+
+Server::Server(void) { }
 
 Server::Server(const char *privateName, const char *publicName)
 {
@@ -60,13 +71,6 @@ int Server::start(char *serverIP, u_short port)
         return 1;
     }
 
-    return 0;
-}
-
-int Server::listenClient(void)
-{
-    int err;
-
     // Put in passive listening mode
     err = listen(serverSocket, nBacklog);
     if (err != 0) {
@@ -74,37 +78,83 @@ int Server::listenClient(void)
         return 1;
     }
 
-    // Accept the first connection on the queue and setup socket connection
-    clientSocket = accept(serverSocket, (struct sockaddr*)&serverAddress, (int *)&addrlen);
-    if (clientSocket == INVALID_SOCKET) {
-        std::cerr << "Client socket setup failed with error: " << clientSocket << std::endl;
-        return 1;
-    }
+    // Set blocking type to non-blocking
+    unsigned long b=1;
+	ioctlsocket(serverSocket,FIONBIO,&b);
 
     return 0;
 }
 
-int Server::connectClient(Certificate CACert)
+int Server::acceptClients(Certificate CACert)
 {
-    int err, nBytes;
-    bool isVerified;
-    
-    // 1(a) Read client certificate
-    CertMSG clientMsg;
-    AuthMSG clientAuth;
-    nBytes = clientAuth.readMSG(clientSocket);
-    if (nBytes == 0) {
-        std::cerr << "Client certificate could not be read" << std::endl;
+    int err;
+    SOCKET clientSocket;
+    Certificate clientCert;
+
+    // Accept any connections in the queue
+    clientSocket = accept(serverSocket, (struct sockaddr*)&serverAddress, (int *)&addrlen);
+    if (clientSocket == SOCKET_ERROR || clientSocket == 0) {
         return 1;
     }
 
+    // Add client to client list
+    ClientSession client(clientSocket);
+    client.state = sendingCert;
+    clients.push_back(client);
+
+	return 0;
+}
+
+int Server::readClients(void)
+{
+    int err;
+    char buffer[DEFAULT_BUFLEN] = { 0 };
+
+    for(ClientSession &client : clients) {
+        int nBytes = recv(client.socket, buffer, DEFAULT_BUFLEN, 0);
+
+        if (nBytes > 0) {
+            switch(client.state)
+            {
+                case disconnected:
+                    std::cout << "Received message from disconnected client" << std::endl;
+                    break;
+                case sendingCert:
+                    verifyClientCert(buffer, client);
+                    sendServerCert(client);
+                    break;
+                case sendingChallenge:
+                    verifyClientResponse(buffer, client);
+                    std::cout << "Client verified" << std::endl;
+                    break;
+                case connected:
+                    std::cout << "Received message from connected client" << std::endl;
+                    break;
+            }
+        }
+    }
+
+	return 0;
+}
+
+int Server::verifyClientCert(std::string msg, ClientSession &client)
+{
+    int nBytes;
+    bool isVerified;
+
+    // 1(a) Read client certificate
+    CertMSG clientMsg;
+    AuthMSG clientAuth;
+    clientAuth.deserialize(msg);
+
     // Extract certificate
     clientMsg.deserialize(clientAuth.msg);
-    clientCert = clientMsg.cert;
+    client.cert = clientMsg.cert;
 
     // 1(b) Verify digital signature
-    isVerified = clientAuth.verify(clientCert.publicKey);
+    isVerified = clientAuth.verify(client.cert.publicKey);
     if (isVerified == false) {
+        client.state = unverified;
         std::cerr << "Message digital signature did not match" << std::endl;
         return 1;
     }
@@ -112,26 +162,72 @@ int Server::connectClient(Certificate CACert)
     // 1(c) Verify client certificate
     isVerified = clientMsg.cert.verify(CACert.publicKey);
     if (isVerified == false) {
+        client.state = unverified;
         std::cerr << "Certificate did not match CA" << std::endl;
         return 1;
     }
-    
+
+    client.state = sendingChallenge;
+
+    return 0;
+}
+
+int Server::sendServerCert(ClientSession &client)
+{   
+    int nBytes;
+
     // 2 Send server certificate
     CertMSG serverMsg(cert);
-    serverMsg.encryptNonce(clientCert.publicKey);
+    client.serverChallenge = serverMsg.nonce;
+    serverMsg.encryptNonce(client.cert.publicKey);
     AuthMSG serverAuth(&serverMsg, privateKey);
 
-    nBytes = serverAuth.sendMSG(clientSocket);
+    nBytes = serverAuth.sendMSG(client.socket);
     if (nBytes == 0) { 
         std::cerr << "Server certificate could not be sent" << std::endl;
         return 1; 
     }
 
+    return 0;
+}
+
+int Server::verifyClientResponse(std::string msg, ClientSession &client)
+{
+    int nBytes;
+    std::string clientChallenge, clientResponse;
+
     // 3(a) Read new challenge-response
+    ChallengeMSG clientCR;
+    AuthMSG clientCRAuth;
+    clientCRAuth.deserialize(msg);
+
+    // Extract response
+    clientCR.deserialize(clientCRAuth.msg);
+    clientCR.decryptNonces(privateKey);
+    clientChallenge = clientCR.challenge;
+    clientResponse  = clientCR.response;
 
     // 3(b) Verify response
+    if (client.serverChallenge != clientResponse) {
+        std::cerr << "Client response did not match challenge" << std::endl;
+        client.state = unverified;
+        return 1;
+    }
+
+    client.serverChallenge.clear();
 
     // 4 Send challenge back
+    ChallengeMSG serverCR(clientChallenge);
+    serverCR.encryptNonces(client.cert.publicKey);
+    AuthMSG serverCRAuth(&serverCR, privateKey);
+
+    nBytes = serverCRAuth.sendMSG(client.socket);
+    if (nBytes == 0) {
+        std::cerr << "Server response could not be sent" << std::endl;
+        return 1;
+    }
+
+    client.state = connected;
 
     return 0;
 }
@@ -158,20 +254,19 @@ int main(int argc, char* argv[])
 
     // Start server
     Server server(privateName, publicName);
+    server.CACert = CACert;
     std::cout << server.cert.subjectName << "\n ----------" << std::endl;
 
     err = server.start(serverIP, port);
     if (err != 0) { return 1; }
     std::cout << "Server started" << std::endl;
 
-    err = server.listenClient();
-    if (err != 0) { return 1; }
-    std::cout << "Client accepted" << std::endl;
-
-    err = server.connectClient(CACert);
-    if (err != 0) { return 1; }
-    std::cout << "Verified client" << std::endl;
-    std::cout << "Connected with: " << server.clientCert.subjectName << std::endl;
+    while(true)
+    {
+        server.acceptClients(CACert);	//Receive connections
+        //server.sendClients();		    //Send data to clients
+        server.readClients();		    //Recive data from clients
+    }
 
     system("pause");
     return 0;

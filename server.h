@@ -23,6 +23,31 @@
 #include "cert.h"
 #include "protocol.h"
 
+enum clientState
+{
+    unverified = -2,
+    disconnected = -1,
+    sendingCert = 0,
+    sendingChallenge = 1,
+    connected = 2
+};
+
+// Client session class specification
+// Example:
+//     ClientSession(cert, socket);
+class ClientSession {
+    public:
+        clientState state = disconnected;
+        Certificate cert;
+        SOCKET socket = INVALID_SOCKET;
+        std::string serverChallenge;
+
+        ClientSession();
+        ClientSession(SOCKET socket);
+        ClientSession(Certificate cert);
+        ClientSession(SOCKET socket, Certificate cert);
+};
+
 // Server class specification
 // Example:
 //     Server server;
@@ -36,7 +61,8 @@ class Server {
         int nBacklog = 3;
         CryptoPP::RSA::PrivateKey privateKey;
         Certificate cert;
-        Certificate clientCert;
+        Certificate CACert;
+        std::vector<ClientSession> clients;
 
         explicit Server(void);
 
@@ -51,18 +77,45 @@ class Server {
         // Returns -> 0 if no errors, 1 if there was an error
         int start(char *serverIP, u_short port);
 
-        // Listens on the specified port and connects to the first client that tries to connect
-        // Returns -> 0 if no errors, 1 if there was an error
-        int listenClient(void);
-
-        // Exchanges certificates with a client and authenticates them
+        // Checks if there are any pending connections and accepts the connection after some checks
         // Inputs -> CACert: the certificate of the certificate authority
+        // Returns -> 0 if a client was accepted, 1 if there was an error or no client was accepted
+        int acceptClients(Certificate CACert);
+
+        // Sends any buffered messages to clients
+        // Inputs -> serverIP: the IP address of the server
+        //           port: the port of the server
         // Returns -> 0 if no errors, 1 if there was an error
-        int connectClient(Certificate CACert);
+        int sendClients();
+
+        // Reads if there are any incoming messages from clients
+        // Inputs -> serverIP: the IP address of the server
+        //           port: the port of the server
+        // Returns -> 0 if no errors, 1 if there was an error
+        int readClients(void);
+
+        // Prints the current table of clients
+        void printClients(void);
 
     private:
         WSADATA wsaData;
         SOCKET serverSocket = INVALID_SOCKET;
-        SOCKET clientSocket = INVALID_SOCKET;
         int addrlen = sizeof(serverAddress);
+
+        // Reads a client's certificate, validates it and validates the authenticity of the client
+        // Inputs -> msg: the certificate message with authorised integrity check
+        //           client: the client that sent their certificate
+        // Returns -> 0 if no errors, 1 if authentication or verification failed
+        int verifyClientCert(std::string msg, ClientSession &client);
+
+        // Sends the server's certificate and challenge to a client
+        // Inputs -> client: the client to send the certificate to
+        // Returns -> 0 if no errors, 1 if message could not be sent
+        int sendServerCert(ClientSession &client);
+
+        // Verify the client's response and send the servers response
+        // Inputs -> msg: the challenge-response message with authorised integrity check
+        //           client: the client to send the response to
+        // Returns -> 0 if no errors, 1 if the response did not match challenge or message could not be sent
+        int verifyClientResponse(std::string msg, ClientSession &client);
 };

@@ -1,6 +1,10 @@
 
 #include "protocol.h"
 
+
+/* SockMSG */
+
+
 void SockMSG::serializeString(std::ostream &out, std::string data)
 {
     out << data.size();
@@ -27,7 +31,10 @@ int SockMSG::readMSG(SOCKET socket)
 {
     char buffer[DEFAULT_BUFLEN] = { 0 };
     int nBytes = recv(socket, buffer, DEFAULT_BUFLEN, 0);
-    deserialize(buffer);
+    
+    if (nBytes > 0) {
+        deserialize(buffer);
+    }
 
     return nBytes;
 }
@@ -40,6 +47,10 @@ int SockMSG::sendMSG(SOCKET socket)
 
     return nBytes;
 }
+
+
+/* CertMSG */
+
 
 CertMSG::CertMSG()
 {
@@ -115,6 +126,88 @@ void CertMSG::decryptNonce(CryptoPP::RSA::PrivateKey privateKey)
     nonce = recovered;
     encrypted = false;
 }
+
+
+/* CertMSG */
+
+
+ChallengeMSG::ChallengeMSG()
+{
+
+}
+
+ChallengeMSG::ChallengeMSG(std::string response)
+{
+    this->response = response;
+}
+
+std::string ChallengeMSG::serialize(void)
+{
+    std::stringstream out;
+    std::string str, challengeString, responseString;
+
+    CryptoPP::StringSource ss1(challenge, true, 
+        new CryptoPP::HexEncoder( new CryptoPP::StringSink(challengeString) )
+    );
+    CryptoPP::StringSource ss2(response, true, 
+        new CryptoPP::HexEncoder( new CryptoPP::StringSink(responseString) )
+    );
+    
+    serializeString(out, challengeString);
+    serializeString(out, responseString);
+
+    str = out.str();
+
+    return str;
+}
+
+void ChallengeMSG::deserialize(std::string str)
+{
+    std::stringstream in;
+    std::string challengeHex, responseHex;
+    in.str(str);
+
+    deserializeString(in, challengeHex);
+    deserializeString(in, responseHex);
+
+    CryptoPP::StringSource ss1(challengeHex, true, 
+        new CryptoPP::HexDecoder( new CryptoPP::StringSink(this->challenge) )
+    );
+    CryptoPP::StringSource ss2(responseHex, true, 
+        new CryptoPP::HexDecoder( new CryptoPP::StringSink(this->response) )
+    );
+}
+
+void ChallengeMSG::generateChallenge(void)
+{
+    this->challenge = Encryption::generateNonce();
+}
+
+void ChallengeMSG::encryptNonces(CryptoPP::RSA::PublicKey publicKey)
+{
+    std::string challengeCipher, responseCipher;
+    Encryption::encrypt(challenge, challengeCipher, publicKey);
+    Encryption::encrypt(response, responseCipher, publicKey);
+    
+    challenge = challengeCipher;
+    response = responseCipher;
+    encrypted = true;
+}
+
+void ChallengeMSG::decryptNonces(CryptoPP::RSA::PrivateKey privateKey)
+{
+    std::string challengeRecovered, responseRecovered;
+    Encryption::decrypt(challenge, challengeRecovered, privateKey);
+    Encryption::decrypt(response, responseRecovered, privateKey);
+    
+    challenge = challengeRecovered;
+    response  = responseRecovered;
+    encrypted = false;
+}
+
+
+/* CertMSG */
+
 
 AuthMSG::AuthMSG()
 {

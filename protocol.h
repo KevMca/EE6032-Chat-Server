@@ -97,6 +97,45 @@ class CertMSG: public SockMSG
         void decryptNonce(CryptoPP::RSA::PrivateKey privateKey);
 };
 
+// Represents a socket message with a challenge nonce and a response nonce
+// Notation: {Nc, Nr}
+// Sending Example:
+//      ChallengeMSG challengeMsg(response);
+// Receiving Example:
+//      ChallengeMSG challengeMsg;
+//      challengeMsg.deserialize(socketMsg);
+class ChallengeMSG: public SockMSG
+{
+    public:
+        std::string challenge = "";
+        std::string response = "";
+        bool encrypted = NULL; // (Not encrypted: false, Encrypted: true, Unknown: NULL)
+
+        explicit ChallengeMSG();
+
+        // Constructs a ChallengeMSG with a response
+        explicit ChallengeMSG(std::string response);
+
+        // Converts the challenge and response to a hex string
+        // Returns -> the serialized contents of the message
+        std::string serialize(void);
+
+        // Converts the serialized contents of the string into a ChallengeMSG object
+        // Inputs -> str: the serialized contents of the message
+        void deserialize(std::string str);
+
+        // Generates a random challenge nonce
+        void generateChallenge(void);
+
+        // Encrypts the nonces so only the recipient can access it
+        // Inputs -> publicKey: the public key of the recipient
+        void encryptNonces(CryptoPP::RSA::PublicKey publicKey);
+
+        // Decrypts the nonces so the intended recipient can access it
+        // Inputs -> privateKey: the private key of the recipient
+        void decryptNonces(CryptoPP::RSA::PrivateKey privateKey);
+};
+
 // Represents a message with an authenticated integrity check
 // Notation: {msg, {H(msg)}_k^-1}
 // Sending Example:

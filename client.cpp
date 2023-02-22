@@ -48,6 +48,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
 {
     int err, nBytes;
     bool isVerified;
+    std::string clientChallenge, serverChallenge, serverResponse;
 
     err = setupServerSocket(serverIP, port);
     if (err != 0) {
@@ -63,6 +64,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
         std::cerr << "Client certificate could not be sent" << std::endl;
         return 1;
     }
+    std::cerr << "Client certificate sent: " << nBytes << std::endl;
 
     // 2(a) Receive server certificate
     CertMSG serverMsg;
@@ -76,6 +78,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     // Extract certificate
     serverMsg.deserialize(serverAuth.msg);
     serverMsg.decryptNonce(privateKey);
+    serverChallenge = serverMsg.nonce;
     serverCert = serverMsg.cert;
 
     // 2(b) Verify digital signature
@@ -93,10 +96,38 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     }
 
     // 3 Send challenge-response
+    ChallengeMSG clientCR(serverChallenge);
+    clientCR.generateChallenge();
+    clientChallenge = clientCR.challenge;
+    clientCR.encryptNonces(serverCert.publicKey);
+    AuthMSG clientCRAuth(&clientCR, privateKey);
+
+    nBytes = clientCRAuth.sendMSG(serverSocket);
+    if (nBytes == 0) {
+        std::cerr << "Client challenge-response could not be sent" << std::endl;
+        return 1;
+    }
 
     // 4(a) Read response
+    ChallengeMSG serverCR;
+    AuthMSG serverCRAuth;
+
+    nBytes = serverCRAuth.readMSG(serverSocket);
+    if (nBytes == 0) {
+        std::cerr << "Server response could not be read" << std::endl;
+        return 1;
+    }
+
+    // Extract response
+    serverCR.deserialize(serverCRAuth.msg);
+    serverCR.decryptNonces(privateKey);
+    serverResponse = serverCR.response;
 
     // 4(b) Verify response
+    if (clientChallenge != serverResponse) {
+        std::cerr << "Server response did not match challenge" << std::endl;
+        return 1;
+    }
 
     return 0;
 }
