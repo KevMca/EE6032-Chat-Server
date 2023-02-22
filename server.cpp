@@ -102,6 +102,8 @@ int Server::acceptClients(Certificate CACert)
     client.state = sendingCert;
     clients.push_back(client);
 
+    printClients();
+
 	return 0;
 }
 
@@ -131,11 +133,27 @@ int Server::readClients(void)
                     std::cout << "Received message from connected client" << std::endl;
                     break;
             }
+
+            printClients();
         }
     }
 
 	return 0;
 }
+
+void Server::printClients(void)
+{
+    std::cout << "\nName                | State" << std::endl;
+    std::cout << "-------------------------------------------" << std::endl;
+    for(ClientSession client : clients) {
+        std::cout << std::setw(20) << client.cert.subjectName << "| ";
+        std::cout << std::setw(20) << clientStateStrings[client.state + 2] << std::endl;
+    }
+}
+
+
+/* Server::Private */
+
 
 int Server::verifyClientCert(std::string msg, ClientSession &client)
 {

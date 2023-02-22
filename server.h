@@ -20,8 +20,18 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
+#include <iomanip>
 #include "cert.h"
 #include "protocol.h"
+
+char *clientStateStrings[] = 
+{
+    "unverified",
+    "disconnected",
+    "sendingCert",
+    "sendingChallenge",
+    "connected"
+};
 
 enum clientState
 {

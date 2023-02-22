@@ -14,9 +14,9 @@
 
 int main(int argc, char* argv[])
 {
-    std::string subjectName = "Alice";
-    const char *privateName = "certs/alice_private.der";
-    const char *publicName  = "certs/alice_public.der";
+    std::string subjectName = "Carol";
+    const char *privateName = "certs/carol_private.der";
+    const char *publicName  = "certs/carol_public.der";
     const char *privateCAName = "certs/root_private.der";
     const char *publicCAName  = "certs/root_public.der";
 

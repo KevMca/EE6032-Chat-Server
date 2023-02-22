@@ -175,8 +175,12 @@ int main(int argc, char* argv[])
     char buffer[DEFAULT_BUFLEN] = { 0 };
 
     // Certificates
-    const char *privateName = "certs/alice_private.der";
-    const char *publicName  = "certs/alice_public.der";
+    std::string stem = "certs/";
+    stem.append(argv[1]);
+    std::string privateString = stem + std::string("_private.der");
+    std::string publicString  = stem + std::string("_public.der");
+    const char *privateName   = privateString.c_str();
+    const char *publicName    = publicString.c_str();
     const char *publicCAName  = "certs/root_public.der";
     
     // Read CA certificate
