@@ -20,6 +20,7 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
+#include <conio.h>
 #include "cert.h"
 #include "protocol.h"
 
@@ -32,6 +33,7 @@
 //     if (err != 0) { return 1; }
 class Client {
     public:
+        SOCKET serverSocket = INVALID_SOCKET;
         struct sockaddr_in serverAddress;
         CryptoPP::RSA::PrivateKey privateKey;
         Certificate cert;
@@ -57,7 +59,6 @@ class Client {
 
     private:
         WSADATA wsaData;
-        SOCKET serverSocket = INVALID_SOCKET;
         int addrlen = sizeof(serverAddress);
 
         // Connects to a server with a specific IP address and port

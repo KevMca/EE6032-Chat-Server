@@ -57,10 +57,10 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
 
     // 1 Send client certificate
     CertMSG clientMsg(cert);
-    AuthMSG clientAuth(&clientMsg, privateKey);
+    AuthMSG clientAuth(&clientMsg, cert.subjectName, "Server", privateKey);
 
     nBytes = clientAuth.sendMSG(serverSocket);
-    if (nBytes == 0) {
+    if (nBytes <= 0) {
         std::cerr << "Client certificate could not be sent" << std::endl;
         return 1;
     }
@@ -70,7 +70,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     CertMSG serverMsg;
     AuthMSG serverAuth;
     nBytes = serverAuth.readMSG(serverSocket);
-    if (nBytes == 0) {
+    if (nBytes <= 0) {
         std::cerr << "Server certificate could not be read" << std::endl;
         return 1;
     }
@@ -100,10 +100,10 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     clientCR.generateChallenge();
     clientChallenge = clientCR.challenge;
     clientCR.encryptNonces(serverCert.publicKey);
-    AuthMSG clientCRAuth(&clientCR, privateKey);
+    AuthMSG clientCRAuth(&clientCR, cert.subjectName, serverCert.subjectName, privateKey);
 
     nBytes = clientCRAuth.sendMSG(serverSocket);
-    if (nBytes == 0) {
+    if (nBytes <= 0) {
         std::cerr << "Client challenge-response could not be sent" << std::endl;
         return 1;
     }
@@ -113,7 +113,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     AuthMSG serverCRAuth;
 
     nBytes = serverCRAuth.readMSG(serverSocket);
-    if (nBytes == 0) {
+    if (nBytes <= 0) {
         std::cerr << "Server response could not be read" << std::endl;
         return 1;
     }
@@ -169,6 +169,8 @@ int main(int argc, char* argv[])
 {
     int err, nBytes;
 
+    bool agreement = false;
+
     // IP Information
     char *serverIP = "127.0.0.1";
     u_short port = 8080;
@@ -196,6 +198,107 @@ int main(int argc, char* argv[])
     err = client.connectServer(serverIP, port, CACert);
     if (err != 0) { return 1; }
     std::cout << "Connected to server" << std::endl;
+
+    // Refresh the screen with current users
+
+    // Listen for messages from server
+    while(1) 
+    {
+        unsigned long nAvailable;
+        ioctlsocket(client.serverSocket, FIONREAD, &nAvailable);
+
+        // Receive socket
+        if(nAvailable > 0)
+        {   
+            // Read where message is coming from
+            char buffer[DEFAULT_BUFLEN] = { 0 };
+            int nBytes = recv(client.serverSocket, buffer, DEFAULT_BUFLEN, 0);
+            if (nBytes <= 0) {
+                std::cerr << "Server message could not be read" << std::endl;
+                return 1;
+            }
+
+            AuthMSG message;
+            message.deserialize(buffer);
+
+            if (!agreement)
+            {
+                // If message is from server (user update)
+                if(message.source == "Server" && message.type == "CertMSG")
+                {
+                    std::cout << "Refresh other user screen... " << std::endl;
+                    // Refresh the screen with current users
+                }
+                // If message is a nonce from another user (invite)
+                else if(message.source != "Server" && message.type == "AgreementMSG")
+                {
+                    std::string input;
+                    std::cout << message.source << " is inviting you to chat. Do you accept? (y/n): " << std::endl;
+                    std::cin >> input;
+                    if (input == "y") {
+                        agreement = true;
+                        // send nonce to other users through server
+                        // incorporate invitee nonce into current nonce
+                    }
+                    else {
+                        // send decline to other users
+                    }
+                }
+            }
+                
+            if (agreement)
+            {
+                // If message is a nonce from another user
+                //      incorporate new nonce into current nonce
+                //      if all received
+                //          send confirmation of total receipt
+                //          increment confirmation of receipt
+                // If message is confirmation of total receipt
+                //      increment confirmation of receipt
+                // If message is a decline
+                //      agreement=false
+                //      clear current nonce
+                // If all parties have confirmed receipt of key
+                //      continue to next stage
+            }
+            
+            //std::cout << "Data available" << std::endl;
+        }
+
+        // Receive keyboard input
+        if (_kbhit()) 
+        {
+            int keyCode{ 0 };
+            keyCode = std::cin.get();
+            std::cout << "Console input: '" << keyCode << "'\n";
+
+            // If input received
+            //      print("... sending invite to other users")
+            //      agreement=true
+            //      send nonce to other users through server
+        }
+        
+    }
+
+    // Listen for messages from server
+    while(1) {
+        // Receive socket
+        // If message received, decrypt and print
+        
+        // Receive keyboard
+        // If input received, print, encrypt and send
+    }
+
+    // Wait for input from user to see other clients connected to server
+    //std::cout << "Press ENTER to see other connected users: ";
+    //std::cin.ignore();
+    //client.requestUsers();
+
+    //std::cout << "Press ENTER to connect to these users: ";
+    //std::cin.ignore();
+    //client.requestUsers();
+    
+    // THen wait for input to connect to other clients
 
     system("pause");
     return 0;

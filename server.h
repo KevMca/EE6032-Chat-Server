@@ -128,4 +128,8 @@ class Server {
         //           client: the client to send the response to
         // Returns -> 0 if no errors, 1 if the response did not match challenge or message could not be sent
         int verifyClientResponse(std::string msg, ClientSession &client);
+
+        int sendClientUpdate(void);
+
+        int sendClientSessions(ClientSession &recipient);
 };

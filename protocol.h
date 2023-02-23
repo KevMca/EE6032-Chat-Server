@@ -23,6 +23,14 @@
 
 #define DEFAULT_BUFLEN 4096
 
+enum messageType
+{
+    certificate = 0,
+    challenge = 1,
+    agreement = 2,
+    message = 3,
+};
+
 // A base abstract class for all messages to be sent in the protocol. Each message requires some
 // basic functions like serialization and sending over sockets
 class SockMSG 
@@ -136,6 +144,36 @@ class ChallengeMSG: public SockMSG
         void decryptNonces(CryptoPP::RSA::PrivateKey privateKey);
 };
 
+// Represents a socket message with a nonce used for key agreement
+// Notation: {N}k_r
+class AgreementMSG: public SockMSG
+{
+    public:
+        std::string nonce;
+        bool encrypted = NULL; // (Not encrypted: false, Encrypted: true, Unknown: NULL)
+
+        explicit AgreementMSG();
+
+        // Converts the nonce to a hex string
+        // Returns -> the serialized contents of the message
+        std::string serialize(void);
+
+        // Converts the serialized contents of the string into a AgreementMSG object
+        // Inputs -> str: the serialized contents of the message
+        void deserialize(std::string str);
+
+        // Generates a random challenge nonce
+        void generateNonce(void);
+
+        // Encrypts the nonce so only the recipient can access it
+        // Inputs -> publicKey: the public key of the recipient
+        void encryptNonce(CryptoPP::RSA::PublicKey publicKey);
+
+        // Decrypts the nonce so the intended recipient can access it
+        // Inputs -> privateKey: the private key of the recipient
+        void decryptNonce(CryptoPP::RSA::PrivateKey privateKey);
+};
+
 // Represents a message with an authenticated integrity check
 // Notation: {msg, {H(msg)}_k^-1}
 // Sending Example:
@@ -147,6 +185,9 @@ class ChallengeMSG: public SockMSG
 class AuthMSG: public SockMSG
 {
     public:
+        std::string type;
+        std::string source;
+        std::string destination;
         std::string msg;
         std::string signature;
 
@@ -154,13 +195,17 @@ class AuthMSG: public SockMSG
 
         // Constructs an AuthMSG object from a SockMSG derived object
         // Inputs -> msg: a pointer to a SockMSG derived object
+        //           source: the name of the source entity
+        //           destination: the name of the destination entity
         //           privateKey: the private key used to sign the message
-        explicit AuthMSG(SockMSG *msg, CryptoPP::RSA::PrivateKey privateKey);
+        explicit AuthMSG(SockMSG *msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey);
 
         // Constructs an AuthMSG object from a string
         // Inputs -> msg: the hex string of a message to sign
+        //           source: the name of the source entity
+        //           destination: the name of the destination entity
         //           privateKey: the private key used to sign the message
-        explicit AuthMSG(std::string msg, CryptoPP::RSA::PrivateKey privateKey);
+        explicit AuthMSG(std::string msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey);
 
         // Converts the contents of the message and signature into a hex string
         // Returns -> the serialized contents of the message

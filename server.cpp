@@ -127,6 +127,7 @@ int Server::readClients(void)
                     break;
                 case sendingChallenge:
                     verifyClientResponse(buffer, client);
+                    sendClientUpdate();
                     std::cout << "Client verified" << std::endl;
                     break;
                 case connected:
@@ -198,7 +199,7 @@ int Server::sendServerCert(ClientSession &client)
     CertMSG serverMsg(cert);
     client.serverChallenge = serverMsg.nonce;
     serverMsg.encryptNonce(client.cert.publicKey);
-    AuthMSG serverAuth(&serverMsg, privateKey);
+    AuthMSG serverAuth(&serverMsg, cert.subjectName, client.cert.subjectName, privateKey);
 
     nBytes = serverAuth.sendMSG(client.socket);
     if (nBytes == 0) { 
@@ -237,7 +238,7 @@ int Server::verifyClientResponse(std::string msg, ClientSession &client)
     // 4 Send challenge back
     ChallengeMSG serverCR(clientChallenge);
     serverCR.encryptNonces(client.cert.publicKey);
-    AuthMSG serverCRAuth(&serverCR, privateKey);
+    AuthMSG serverCRAuth(&serverCR, cert.subjectName, client.cert.subjectName, privateKey);
 
     nBytes = serverCRAuth.sendMSG(client.socket);
     if (nBytes == 0) {
@@ -246,6 +247,39 @@ int Server::verifyClientResponse(std::string msg, ClientSession &client)
     }
 
     client.state = connected;
+
+    return 0;
+}
+
+int Server::sendClientUpdate(void)
+{   
+    for(ClientSession &client : clients) {
+        if(client.state == connected)
+        {
+            sendClientSessions(client);
+        }
+    }
+
+    return 0;
+}
+
+int Server::sendClientSessions(ClientSession &recipient)
+{
+    int nBytes;
+
+    for(ClientSession &client : clients) {
+        if (client.cert.subjectName != recipient.cert.subjectName)
+        {
+            CertMSG serverMsg(client.cert);
+            AuthMSG serverAuth(&serverMsg, cert.subjectName, recipient.cert.subjectName, privateKey);
+
+            nBytes = serverAuth.sendMSG(recipient.socket);
+            if (nBytes == 0) { 
+                std::cerr << "Client certificate could not be sent" << std::endl;
+                return 1;
+            }
+        }
+    }
 
     return 0;
 }

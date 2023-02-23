@@ -214,14 +214,20 @@ AuthMSG::AuthMSG()
 
 }
 
-AuthMSG::AuthMSG(SockMSG *msg, CryptoPP::RSA::PrivateKey privateKey)
+AuthMSG::AuthMSG(SockMSG *msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey)
 {
+    this->type = typeid(*msg).name() + 6;
+    this->source = source;
+    this->destination = destination;
     this->msg = msg->serialize();
     this->signature = createSignature(privateKey);
 }
 
-AuthMSG::AuthMSG(std::string msg, CryptoPP::RSA::PrivateKey privateKey)
+AuthMSG::AuthMSG(std::string msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey)
 {
+    this->type = "undefined";
+    this->source = source;
+    this->destination = destination;
     this->msg = msg;
     this->signature = createSignature(privateKey);
 }
@@ -231,6 +237,9 @@ std::string AuthMSG::serialize(void)
     std::stringstream out;
     std::string str;
     
+    serializeString(out, type);
+    serializeString(out, source);
+    serializeString(out, destination);
     serializeString(out, msg);
     serializeString(out, signature);
 
@@ -244,6 +253,9 @@ void AuthMSG::deserialize(std::string str)
     std::stringstream in;
     in.str(str);
 
+    deserializeString(in, type);
+    deserializeString(in, source);
+    deserializeString(in, destination);
     deserializeString(in, msg);
     deserializeString(in, signature);
 }
