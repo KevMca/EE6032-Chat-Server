@@ -131,6 +131,7 @@ int Server::readClients(void)
                     std::cout << "Client verified" << std::endl;
                     break;
                 case connected:
+                    echoMessage(buffer);
                     std::cout << "Received message from connected client" << std::endl;
                     break;
             }
@@ -282,6 +283,41 @@ int Server::sendClientSessions(ClientSession &recipient)
     }
 
     return 0;
+}
+
+int Server::echoMessage(std::string msg)
+{
+    int nBytes;
+
+    AuthMSG clientAuth;
+    clientAuth.deserialize(msg);
+
+    SOCKET clientSocket = getClientSocket(clientAuth.destination);
+    if(clientSocket == NULL)
+    {
+        std::cerr << "The destination for message is unknown to the server" << std::endl;
+        return 1;
+    }
+
+    nBytes = clientAuth.sendMSG(clientSocket);
+    if (nBytes == 0) { 
+        std::cerr << "Client message could not be echoed" << std::endl;
+        return 1;
+    }
+
+    return 0;
+}
+
+SOCKET Server::getClientSocket(std::string subjectName)
+{
+    for(ClientSession &client : clients) {
+        if(client.cert.subjectName == subjectName)
+        {
+            return client.socket;
+        }
+    }
+
+    return NULL;
 }
 
 

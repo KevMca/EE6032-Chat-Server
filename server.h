@@ -132,4 +132,8 @@ class Server {
         int sendClientUpdate(void);
 
         int sendClientSessions(ClientSession &recipient);
+
+        int echoMessage(std::string msg);
+
+        SOCKET getClientSocket(std::string subjectName);
 };

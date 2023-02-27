@@ -20,9 +20,22 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
+#include <iomanip>
 #include <conio.h>
 #include "cert.h"
 #include "protocol.h"
+
+// Client session class for other clients connected to the server
+// Example:
+//     ClientSession(cert, socket);
+class ClientSession {
+    public:
+        Certificate cert;
+        std::string partialKey;
+
+        ClientSession();
+        ClientSession(Certificate cert);
+};
 
 // Client class specification
 // Example:
@@ -38,6 +51,8 @@ class Client {
         CryptoPP::RSA::PrivateKey privateKey;
         Certificate cert;
         Certificate serverCert;
+        std::vector<ClientSession> clients;
+        std::string partialKey;
 
         explicit Client(void);
 
@@ -56,6 +71,16 @@ class Client {
         //           CACert: the certificate of the certificate authority
         // Returns -> 0 if no errors, 1 if there was an error
         int connectServer(char *serverIP, u_short port, Certificate CACert);
+
+        int sendPartialKey(void);
+
+        // Adds a client certificate to the list of other clients, if it doesn't already exist
+        // Inputs -> clientCert: the certificate of a different client connected to the server
+        // Returns -> true if certificate already, false if certificate already existed
+        bool updateClients(Certificate &clientCert);
+
+        // Prints the current table of other clients
+        void printClients(void);
 
     private:
         WSADATA wsaData;

@@ -128,7 +128,7 @@ void CertMSG::decryptNonce(CryptoPP::RSA::PrivateKey privateKey)
 }
 
 
-/* CertMSG */
+/* ChallengeMSG */
 
 
 ChallengeMSG::ChallengeMSG()
@@ -205,8 +205,68 @@ void ChallengeMSG::decryptNonces(CryptoPP::RSA::PrivateKey privateKey)
     encrypted = false;
 }
 
+/* AgreementMSG */
 
-/* CertMSG */
+
+AgreementMSG::AgreementMSG()
+{
+
+}
+
+std::string AgreementMSG::serialize(void)
+{
+    std::stringstream out;
+    std::string str, nonceString;
+
+    CryptoPP::StringSource ss1(nonce, true, 
+        new CryptoPP::HexEncoder( new CryptoPP::StringSink(nonceString) )
+    );
+    
+    serializeString(out, nonceString);
+
+    str = out.str();
+
+    return str;
+}
+
+void AgreementMSG::deserialize(std::string str)
+{
+    std::stringstream in;
+    std::string nonceHex;
+    in.str(str);
+
+    deserializeString(in, nonceHex);
+
+    CryptoPP::StringSource ss1(nonceHex, true, 
+        new CryptoPP::HexDecoder( new CryptoPP::StringSink(this->nonce) )
+    );
+}
+
+void AgreementMSG::generateNonce(void)
+{
+    this->nonce = Encryption::generateNonce();
+}
+
+void AgreementMSG::encryptNonce(CryptoPP::RSA::PublicKey publicKey)
+{
+    std::string nonceCipher;
+    Encryption::encrypt(nonce, nonceCipher, publicKey);
+    
+    nonce = nonceCipher;
+    encrypted = true;
+}
+
+void AgreementMSG::decryptNonce(CryptoPP::RSA::PrivateKey privateKey)
+{
+    std::string nonceRecovered;
+    Encryption::decrypt(nonce, nonceRecovered, privateKey);
+    
+    nonce = nonceRecovered;
+    encrypted = false;
+}
+
+
+/* AuthMSG */
 
 
 AuthMSG::AuthMSG()

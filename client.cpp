@@ -8,6 +8,13 @@
 #include "client.h"
 
 
+/* ClientSession */
+
+
+ClientSession::ClientSession(void) { }
+ClientSession::ClientSession(Certificate cert) { this->cert = cert; }
+
+
 /* Public */
 
 
@@ -132,6 +139,61 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     return 0;
 }
 
+int Client::sendPartialKey(void)
+{
+    int err, nBytes;
+    bool isVerified;
+    std::string clientChallenge, serverChallenge, serverResponse;
+
+    // Create partial key
+    AgreementMSG clientMsg;
+    clientMsg.generateNonce();
+    partialKey = clientMsg.nonce;
+
+    // Send key to each client
+    for(ClientSession client : clients) {
+        AuthMSG clientAuth(&clientMsg, cert.subjectName, client.cert.subjectName, privateKey);
+
+        nBytes = clientAuth.sendMSG(serverSocket);
+        if (nBytes <= 0) {
+            std::cerr << "Client certificate could not be sent" << std::endl;
+            return 1;
+        }
+        std::cerr << "Partial key sent to: " << client.cert.subjectName << std::endl;
+    }
+
+    return 0;
+}
+
+bool Client::updateClients(Certificate &clientCert)
+{
+    bool exists = false;
+
+    for(ClientSession client : clients) {
+        if(client.cert.subjectName == clientCert.subjectName)
+        {
+            exists = true;
+            break;
+        }
+    }
+
+    if(exists == false) {
+        ClientSession newSession(clientCert);
+        clients.push_back(newSession);
+    }
+
+    return !exists;
+}
+
+void Client::printClients(void)
+{
+    std::cout << "\nName" << std::endl;
+    std::cout << "-------------------------------------------" << std::endl;
+    for(ClientSession client : clients) {
+        std::cout << client.cert.subjectName << std::endl;
+    }
+}
+
 
 /* Private */
 
@@ -218,22 +280,44 @@ int main(int argc, char* argv[])
                 return 1;
             }
 
-            AuthMSG message;
-            message.deserialize(buffer);
+            AuthMSG messageAuth;
+            messageAuth.deserialize(buffer);
 
             if (!agreement)
             {
                 // If message is from server (user update)
-                if(message.source == "Server" && message.type == "CertMSG")
+                if(messageAuth.source == "Server" && messageAuth.type == "CertMSG")
                 {
-                    std::cout << "Refresh other user screen... " << std::endl;
-                    // Refresh the screen with current users
+                    CertMSG serverMsg;
+                    Certificate clientCert;
+                    bool isVerified;
+
+                    // Verify digital signature
+                    isVerified = messageAuth.verify(client.serverCert.publicKey);
+                    if (isVerified == false) {
+                        std::cerr << "Message digital signature did not match" << std::endl;
+                        return 1;
+                    }
+
+                    // Extract certificate message
+                    serverMsg.deserialize(messageAuth.msg);
+                    clientCert = serverMsg.cert;
+
+                    // Verify server certificate
+                    isVerified = clientCert.verify(CACert.publicKey);
+                    if (isVerified == false) {
+                        std::cerr << "Certificate did not match CA" << std::endl;
+                        return 1;
+                    }
+
+                    bool updated = client.updateClients(clientCert);
+                    if(updated) { client.printClients(); }
                 }
                 // If message is a nonce from another user (invite)
-                else if(message.source != "Server" && message.type == "AgreementMSG")
+                else if(messageAuth.source != "Server" && messageAuth.type == "AgreementMSG")
                 {
                     std::string input;
-                    std::cout << message.source << " is inviting you to chat. Do you accept? (y/n): " << std::endl;
+                    std::cout << messageAuth.source << " is inviting you to chat. Do you accept? (y/n): " << std::endl;
                     std::cin >> input;
                     if (input == "y") {
                         agreement = true;
@@ -268,14 +352,29 @@ int main(int argc, char* argv[])
         // Receive keyboard input
         if (_kbhit()) 
         {
-            int keyCode{ 0 };
-            keyCode = std::cin.get();
-            std::cout << "Console input: '" << keyCode << "'\n";
+            std::string input;
+            std::cin >> input;
 
-            // If input received
-            //      print("... sending invite to other users")
-            //      agreement=true
-            //      send nonce to other users through server
+            if (!agreement)
+            {
+                // If the user wants to connect
+                if(input == "y") {
+                    agreement = true;
+                    // send nonce to other users through server
+                    client.sendPartialKey();
+                }
+                // Otherwise close the program 
+                else {
+                    return 1;
+                }
+            }
+
+            if(agreement)
+            {
+
+            }
+
+            
         }
         
     }
