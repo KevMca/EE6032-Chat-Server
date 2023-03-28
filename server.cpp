@@ -287,19 +287,20 @@ int Server::sendClientSessions(ClientSession &recipient)
 
 int Server::echoMessage(std::string msg)
 {
-    int nBytes;
+    int nBytes, err;
 
     AuthMSG clientAuth;
     clientAuth.deserialize(msg);
 
-    SOCKET clientSocket = getClientSocket(clientAuth.destination);
-    if(clientSocket == NULL)
+    ClientSession client;
+    err = getClientSession(clientAuth.destination, client);
+    if(err != 0)
     {
         std::cerr << "The destination for message is unknown to the server" << std::endl;
         return 1;
     }
 
-    nBytes = clientAuth.sendMSG(clientSocket);
+    nBytes = clientAuth.sendMSG(client.socket);
     if (nBytes == 0) { 
         std::cerr << "Client message could not be echoed" << std::endl;
         return 1;
@@ -308,16 +309,17 @@ int Server::echoMessage(std::string msg)
     return 0;
 }
 
-SOCKET Server::getClientSocket(std::string subjectName)
+int Server::getClientSession(std::string subjectName, ClientSession &session)
 {
     for(ClientSession &client : clients) {
         if(client.cert.subjectName == subjectName)
         {
-            return client.socket;
+            session = client;
+            return 0;
         }
     }
 
-    return NULL;
+    return 1;
 }
 
 

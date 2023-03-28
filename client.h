@@ -37,6 +37,8 @@ class ClientSession {
         ClientSession(Certificate cert);
 };
 
+enum ClientState { startup, ready, agreeing, chatting };
+
 // Client class specification
 // Example:
 //     Client alice;
@@ -46,6 +48,7 @@ class ClientSession {
 //     if (err != 0) { return 1; }
 class Client {
     public:
+        ClientState state = startup;
         SOCKET serverSocket = INVALID_SOCKET;
         struct sockaddr_in serverAddress;
         CryptoPP::RSA::PrivateKey privateKey;
@@ -72,19 +75,32 @@ class Client {
         // Returns -> 0 if no errors, 1 if there was an error
         int connectServer(char *serverIP, u_short port, Certificate CACert);
 
+        int readServer(Certificate CACert);
+
+        // Prints the current table of other clients
+        void printClients(void);
+
+        int getClientSession(std::string subjectName, ClientSession **session);
+
         int sendPartialKey(void);
+
+    private:
+        WSADATA wsaData;
+        int addrlen = sizeof(serverAddress);
+
+
+        int readPartialKey(AuthMSG messageAuth, std::string &partialKey);
+
+        int readCertificate(AuthMSG messageAuth, Certificate CACert, Certificate &newCert);
+
+        int incorporatePartialKey(std::string clientPartialKey);
+
+        bool isAgreementComplete(void);
 
         // Adds a client certificate to the list of other clients, if it doesn't already exist
         // Inputs -> clientCert: the certificate of a different client connected to the server
         // Returns -> true if certificate already, false if certificate already existed
         bool updateClients(Certificate &clientCert);
-
-        // Prints the current table of other clients
-        void printClients(void);
-
-    private:
-        WSADATA wsaData;
-        int addrlen = sizeof(serverAddress);
 
         // Connects to a server with a specific IP address and port
         // Inputs -> serverIP: the IP address of the server

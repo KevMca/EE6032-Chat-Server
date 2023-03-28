@@ -135,5 +135,5 @@ class Server {
 
         int echoMessage(std::string msg);
 
-        SOCKET getClientSocket(std::string subjectName);
+        int getClientSession(std::string subjectName, ClientSession &session);
 };

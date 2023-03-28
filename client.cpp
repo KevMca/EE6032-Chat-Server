@@ -136,6 +136,82 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
         return 1;
     }
 
+    state = ready;
+
+    return 0;
+}
+
+int Client::readServer(Certificate CACert)
+{
+    int nBytes, err;
+    char buffer[DEFAULT_BUFLEN] = { 0 };
+    
+    nBytes = recv(serverSocket, buffer, DEFAULT_BUFLEN, 0);
+    if (nBytes <= 0) {
+        std::cerr << "Server message could not be read" << std::endl;
+        return 1;
+    }
+
+    AuthMSG messageAuth;
+    messageAuth.deserialize(buffer);
+
+    if(messageAuth.source == "Server") {
+        // Server source
+        if(messageAuth.type == "CertMSG") {
+            // Read client certificate
+            Certificate newCert;
+            readCertificate(messageAuth, CACert, newCert);
+
+            // Update client list
+            bool updated = updateClients(newCert);
+            if(updated) { printClients(); }
+        }
+    } 
+    else {
+        // Client source
+        if(messageAuth.type == "AgreementMSG") {
+
+            std::string input;
+
+            if (state == ready)
+            {
+                std::cout << messageAuth.source << " is inviting you to chat. Do you accept? (y/n): " << std::endl;
+                std::cin >> input;
+                if (input != "y")
+                {
+                    return 1;
+                }
+                // send nonce to other users through server
+                sendPartialKey();
+                state = agreeing;
+            }
+
+            // Read nonce
+            std::string clientPartialKey;
+            readPartialKey(messageAuth, clientPartialKey);
+            std::cout << "Partial key received: " << messageAuth.source << std::endl;
+
+            // Save partial key to client list
+            ClientSession *client;
+            err = getClientSession(messageAuth.source, &client);
+            if (err != 0) {
+                std::cerr << "The destination for message is unknown to the server" << std::endl;
+                return 1;
+            }
+            client->partialKey = clientPartialKey;
+
+            // Incorporate other client's nonce into current nonce
+            incorporatePartialKey(clientPartialKey);
+
+            // If all partial keys are received
+            if (isAgreementComplete())
+            {
+                std::cout << partialKey << std::endl;
+                std::cout << "Agreement complete" << std::endl;
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -146,12 +222,17 @@ int Client::sendPartialKey(void)
     std::string clientChallenge, serverChallenge, serverResponse;
 
     // Create partial key
-    AgreementMSG clientMsg;
-    clientMsg.generateNonce();
-    partialKey = clientMsg.nonce;
+    AgreementMSG baseMsg;
+    baseMsg.generateNonce();
+    partialKey = baseMsg.nonce;
 
     // Send key to each client
     for(ClientSession client : clients) {
+        // Encrypt nonce for the destination client
+        AgreementMSG clientMsg = baseMsg;
+        clientMsg.encryptNonce(client.cert.publicKey);
+
+        // Create authenticated integrity message
         AuthMSG clientAuth(&clientMsg, cert.subjectName, client.cert.subjectName, privateKey);
 
         nBytes = clientAuth.sendMSG(serverSocket);
@@ -163,6 +244,87 @@ int Client::sendPartialKey(void)
     }
 
     return 0;
+}
+
+int Client::readPartialKey(AuthMSG messageAuth, std::string &partialKey)
+{
+    int err;
+    bool isVerified;
+
+    // Get session for sender
+    ClientSession *sender;
+    err = getClientSession(messageAuth.source, &sender);
+    if (err != 0) {
+        std::cerr << "The destination for message is unknown to the server" << std::endl;
+        return 1;
+    }
+
+    // Verify digital signature
+    isVerified = messageAuth.verify(sender->cert.publicKey);
+    if (isVerified == false) {
+        std::cerr << "Message digital signature did not match" << std::endl;
+        return 1;
+    }
+
+    // Read in message and decrypt nonce
+    AgreementMSG clientMsg;
+    clientMsg.deserialize(messageAuth.msg);
+    clientMsg.decryptNonce(privateKey);
+    partialKey = clientMsg.nonce;
+
+    return 0;
+}
+
+int Client::readCertificate(AuthMSG messageAuth, Certificate CACert, Certificate &newCert)
+{
+    // Verify digital signature
+    bool isVerified = messageAuth.verify(serverCert.publicKey);
+    if (isVerified == false) {
+        std::cerr << "Message digital signature did not match" << std::endl;
+        return 1;
+    }
+
+    // Extract certificate message
+    CertMSG messageCert;
+    messageCert.deserialize(messageAuth.msg);
+    newCert = messageCert.cert;
+
+    // Verify server certificate
+    isVerified = newCert.verify(CACert.publicKey);
+    if (isVerified == false) {
+        std::cerr << "Certificate did not match CA" << std::endl;
+        return 1;
+    }
+
+    return 0;
+}
+
+int Client::incorporatePartialKey(std::string clientPartialKey)
+{
+    // Check if incoming partial key has the same length
+    if (partialKey.length() != clientPartialKey.length())
+    {
+        std::cerr << "Input partial key is not the same length as the current partial key" << std::endl;
+        return 1;
+    }
+
+    // Bitwise OR the current partial key with the incoming client partial key
+    for (int i = 0; i < partialKey.length(); i++) {
+        partialKey[i] |= clientPartialKey[i];
+    }
+
+    return 0;
+}
+
+bool Client::isAgreementComplete(void)
+{
+    for(ClientSession &client : clients) {
+        if(client.partialKey.empty())
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool Client::updateClients(Certificate &clientCert)
@@ -192,6 +354,19 @@ void Client::printClients(void)
     for(ClientSession client : clients) {
         std::cout << client.cert.subjectName << std::endl;
     }
+}
+
+int Client::getClientSession(std::string subjectName, ClientSession **session)
+{
+    for(ClientSession &client : clients) {
+        if(client.cert.subjectName == subjectName)
+        {
+            *(session) = &client;
+            return 0;
+        }
+    }
+
+    return 1;
 }
 
 
@@ -230,8 +405,6 @@ int Client::setupServerSocket(char *serverIP, u_short port)
 int main(int argc, char* argv[])
 {
     int err, nBytes;
-
-    bool agreement = false;
 
     // IP Information
     char *serverIP = "127.0.0.1";
@@ -272,81 +445,8 @@ int main(int argc, char* argv[])
         // Receive socket
         if(nAvailable > 0)
         {   
-            // Read where message is coming from
-            char buffer[DEFAULT_BUFLEN] = { 0 };
-            int nBytes = recv(client.serverSocket, buffer, DEFAULT_BUFLEN, 0);
-            if (nBytes <= 0) {
-                std::cerr << "Server message could not be read" << std::endl;
-                return 1;
-            }
-
-            AuthMSG messageAuth;
-            messageAuth.deserialize(buffer);
-
-            if (!agreement)
-            {
-                // If message is from server (user update)
-                if(messageAuth.source == "Server" && messageAuth.type == "CertMSG")
-                {
-                    CertMSG serverMsg;
-                    Certificate clientCert;
-                    bool isVerified;
-
-                    // Verify digital signature
-                    isVerified = messageAuth.verify(client.serverCert.publicKey);
-                    if (isVerified == false) {
-                        std::cerr << "Message digital signature did not match" << std::endl;
-                        return 1;
-                    }
-
-                    // Extract certificate message
-                    serverMsg.deserialize(messageAuth.msg);
-                    clientCert = serverMsg.cert;
-
-                    // Verify server certificate
-                    isVerified = clientCert.verify(CACert.publicKey);
-                    if (isVerified == false) {
-                        std::cerr << "Certificate did not match CA" << std::endl;
-                        return 1;
-                    }
-
-                    bool updated = client.updateClients(clientCert);
-                    if(updated) { client.printClients(); }
-                }
-                // If message is a nonce from another user (invite)
-                else if(messageAuth.source != "Server" && messageAuth.type == "AgreementMSG")
-                {
-                    std::string input;
-                    std::cout << messageAuth.source << " is inviting you to chat. Do you accept? (y/n): " << std::endl;
-                    std::cin >> input;
-                    if (input == "y") {
-                        agreement = true;
-                        // send nonce to other users through server
-                        // incorporate invitee nonce into current nonce
-                    }
-                    else {
-                        // send decline to other users
-                    }
-                }
-            }
-                
-            if (agreement)
-            {
-                // If message is a nonce from another user
-                //      incorporate new nonce into current nonce
-                //      if all received
-                //          send confirmation of total receipt
-                //          increment confirmation of receipt
-                // If message is confirmation of total receipt
-                //      increment confirmation of receipt
-                // If message is a decline
-                //      agreement=false
-                //      clear current nonce
-                // If all parties have confirmed receipt of key
-                //      continue to next stage
-            }
-            
-            //std::cout << "Data available" << std::endl;
+            err = client.readServer(CACert);
+            if (err != 0) { return 1; }
         }
 
         // Receive keyboard input
@@ -355,11 +455,11 @@ int main(int argc, char* argv[])
             std::string input;
             std::cin >> input;
 
-            if (!agreement)
+            if (client.state != agreeing)
             {
                 // If the user wants to connect
                 if(input == "y") {
-                    agreement = true;
+                    client.state = agreeing;
                     // send nonce to other users through server
                     client.sendPartialKey();
                 }
@@ -368,13 +468,6 @@ int main(int argc, char* argv[])
                     return 1;
                 }
             }
-
-            if(agreement)
-            {
-
-            }
-
-            
         }
         
     }
