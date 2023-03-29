@@ -174,6 +174,34 @@ class AgreementMSG: public SockMSG
         void decryptNonce(CryptoPP::RSA::PrivateKey privateKey);
 };
 
+// Represents a socket message with a nonce used for key agreement
+// Notation: {Msg}k_abc
+class ChatMSG: public SockMSG
+{
+    public:
+        std::string message;
+        CryptoPP::SecByteBlock iv;
+        bool encrypted = NULL; // (Not encrypted: false, Encrypted: true, Unknown: NULL)
+
+        explicit ChatMSG();
+
+        // Converts the chat message to a hex string
+        // Returns -> the serialized contents of the message
+        std::string serialize(void);
+
+        // Converts the serialized contents of the string into a ChatMSG object
+        // Inputs -> str: the serialized contents of the message
+        void deserialize(std::string str);
+
+        // Symmetrically encrypts the chat message so only the recipient can access it
+        // Inputs -> sharedKey: the shared key that is known by all parties
+        void encryptMessage(std::string sharedKey);
+
+        // Symmetrically decrypts the chat message so the intended recipient can access it
+        // Inputs -> sharedKey: the shared key that is known by all parties
+        void decryptMessage(std::string sharedKey);
+};
+
 // Represents a message with an authenticated integrity check
 // Notation: {msg, {H(msg)}_k^-1}
 // Sending Example:
@@ -207,6 +235,9 @@ class AuthMSG: public SockMSG
         //           privateKey: the private key used to sign the message
         explicit AuthMSG(std::string msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey);
 
+        explicit AuthMSG(SockMSG *msg, std::string source, std::string destination);
+        explicit AuthMSG(std::string msg, std::string source, std::string destination);
+        
         // Converts the contents of the message and signature into a hex string
         // Returns -> the serialized contents of the message
         std::string serialize(void);

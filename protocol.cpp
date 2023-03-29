@@ -114,7 +114,7 @@ void CertMSG::deserialize(std::string str)
 void CertMSG::encryptNonce(CryptoPP::RSA::PublicKey publicKey)
 {
     std::string cipher;
-    Encryption::encrypt(nonce, cipher, publicKey);
+    Encryption::asymEncrypt(nonce, cipher, publicKey);
     nonce = cipher;
     encrypted = true;
 }
@@ -122,7 +122,7 @@ void CertMSG::encryptNonce(CryptoPP::RSA::PublicKey publicKey)
 void CertMSG::decryptNonce(CryptoPP::RSA::PrivateKey privateKey)
 {
     std::string recovered;
-    Encryption::decrypt(nonce, recovered, privateKey);
+    Encryption::asymDecrypt(nonce, recovered, privateKey);
     nonce = recovered;
     encrypted = false;
 }
@@ -186,8 +186,8 @@ void ChallengeMSG::generateChallenge(void)
 void ChallengeMSG::encryptNonces(CryptoPP::RSA::PublicKey publicKey)
 {
     std::string challengeCipher, responseCipher;
-    Encryption::encrypt(challenge, challengeCipher, publicKey);
-    Encryption::encrypt(response, responseCipher, publicKey);
+    Encryption::asymEncrypt(challenge, challengeCipher, publicKey);
+    Encryption::asymEncrypt(response, responseCipher, publicKey);
     
     challenge = challengeCipher;
     response = responseCipher;
@@ -197,8 +197,8 @@ void ChallengeMSG::encryptNonces(CryptoPP::RSA::PublicKey publicKey)
 void ChallengeMSG::decryptNonces(CryptoPP::RSA::PrivateKey privateKey)
 {
     std::string challengeRecovered, responseRecovered;
-    Encryption::decrypt(challenge, challengeRecovered, privateKey);
-    Encryption::decrypt(response, responseRecovered, privateKey);
+    Encryption::asymDecrypt(challenge, challengeRecovered, privateKey);
+    Encryption::asymDecrypt(response, responseRecovered, privateKey);
     
     challenge = challengeRecovered;
     response  = responseRecovered;
@@ -250,7 +250,7 @@ void AgreementMSG::generateNonce(void)
 void AgreementMSG::encryptNonce(CryptoPP::RSA::PublicKey publicKey)
 {
     std::string nonceCipher;
-    Encryption::encrypt(nonce, nonceCipher, publicKey);
+    Encryption::asymEncrypt(nonce, nonceCipher, publicKey);
     
     nonce = nonceCipher;
     encrypted = true;
@@ -259,9 +259,87 @@ void AgreementMSG::encryptNonce(CryptoPP::RSA::PublicKey publicKey)
 void AgreementMSG::decryptNonce(CryptoPP::RSA::PrivateKey privateKey)
 {
     std::string nonceRecovered;
-    Encryption::decrypt(nonce, nonceRecovered, privateKey);
+    Encryption::asymDecrypt(nonce, nonceRecovered, privateKey);
     
     nonce = nonceRecovered;
+    encrypted = false;
+}
+
+
+/* AgreementMSG */
+
+
+ChatMSG::ChatMSG() : iv(CryptoPP::AES::BLOCKSIZE)
+{
+
+}
+
+std::string ChatMSG::serialize(void)
+{
+    using namespace CryptoPP;
+
+    std::stringstream out;
+    std::string str, messageHex, ivHex, ivString;
+
+    StringSource ss1(this->message, true, 
+        new HexEncoder( new StringSink(messageHex) )
+    );
+
+    ivString = std::string((const char*)this->iv.data(), this->iv.size());
+    StringSource ss2(ivString, true, 
+        new HexEncoder( new StringSink(ivHex) )
+    );
+    
+    serializeString(out, messageHex);
+    serializeString(out, ivHex);
+
+    str = out.str();
+
+    return str;
+}
+
+void ChatMSG::deserialize(std::string str)
+{
+    using namespace CryptoPP;
+
+    std::stringstream in;
+    std::string messageHex, ivHex, ivString;
+    in.str(str);
+
+    deserializeString(in, messageHex);
+    deserializeString(in, ivHex);
+
+    StringSource ss1(messageHex, true, 
+        new HexDecoder( new StringSink(this->message) )
+    );
+
+    StringSource ss2(ivHex, true, 
+        new HexDecoder( new StringSink(ivString) )
+    );
+    this->iv = SecByteBlock((const byte*)ivString.data(), ivString.size());
+}
+
+void ChatMSG::encryptMessage(std::string sharedKey)
+{
+    using namespace CryptoPP;
+
+    // Generate random Initial Variation (IV)
+    AutoSeededRandomPool prng;
+    prng.GenerateBlock(this->iv, this->iv.size());
+    
+    std::string cipher;
+    Encryption::symEncrypt(message, cipher, sharedKey, this->iv);
+    
+    message = cipher;
+    encrypted = true;
+}
+
+void ChatMSG::decryptMessage(std::string sharedKey)
+{
+    std::string recovered;
+    Encryption::symDecrypt(message, recovered, sharedKey, iv);
+    
+    message = recovered;
     encrypted = false;
 }
 
@@ -273,6 +351,8 @@ AuthMSG::AuthMSG()
 {
 
 }
+
+
 
 AuthMSG::AuthMSG(SockMSG *msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey)
 {
@@ -290,6 +370,22 @@ AuthMSG::AuthMSG(std::string msg, std::string source, std::string destination, C
     this->destination = destination;
     this->msg = msg;
     this->signature = createSignature(privateKey);
+}
+
+AuthMSG::AuthMSG(SockMSG *msg, std::string source, std::string destination)
+{
+    this->type = typeid(*msg).name() + 6;
+    this->source = source;
+    this->destination = destination;
+    this->msg = msg->serialize();
+}
+
+AuthMSG::AuthMSG(std::string msg, std::string source, std::string destination)
+{
+    this->type = "undefined";
+    this->source = source;
+    this->destination = destination;
+    this->msg = msg;
 }
 
 std::string AuthMSG::serialize(void)

@@ -20,6 +20,7 @@
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
 
+#include <iostream>
 #include <iomanip>
 #include <conio.h>
 #include "cert.h"
@@ -83,6 +84,10 @@ class Client {
         int getClientSession(std::string subjectName, ClientSession **session);
 
         int sendPartialKey(void);
+
+        int sendMessage(std::string message);
+
+        int readMessage(AuthMSG messageAuth, std::string &message);
 
     private:
         WSADATA wsaData;

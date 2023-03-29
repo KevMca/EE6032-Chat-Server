@@ -169,7 +169,7 @@ int Client::readServer(Certificate CACert)
     } 
     else {
         // Client source
-        if(messageAuth.type == "AgreementMSG") {
+        if(messageAuth.type == "AgreementMSG" && state != chatting) {
 
             std::string input;
 
@@ -206,9 +206,16 @@ int Client::readServer(Certificate CACert)
             // If all partial keys are received
             if (isAgreementComplete())
             {
-                std::cout << partialKey << std::endl;
+                state = chatting;
+                std::cout << "Shared key: " << this->partialKey << std::endl;
                 std::cout << "Agreement complete" << std::endl;
             }
+        }
+        else if(messageAuth.type == "ChatMSG" && state == chatting) {
+            std::string message;
+            readMessage(messageAuth, message);
+
+            std::cout << "Received message from " << messageAuth.source << ": " << message << std::endl;
         }
     }
 
@@ -217,14 +224,12 @@ int Client::readServer(Certificate CACert)
 
 int Client::sendPartialKey(void)
 {
-    int err, nBytes;
-    bool isVerified;
-    std::string clientChallenge, serverChallenge, serverResponse;
+    int nBytes;
 
     // Create partial key
     AgreementMSG baseMsg;
     baseMsg.generateNonce();
-    partialKey = baseMsg.nonce;
+    this->partialKey = baseMsg.nonce;
 
     // Send key to each client
     for(ClientSession client : clients) {
@@ -237,7 +242,7 @@ int Client::sendPartialKey(void)
 
         nBytes = clientAuth.sendMSG(serverSocket);
         if (nBytes <= 0) {
-            std::cerr << "Client certificate could not be sent" << std::endl;
+            std::cerr << "Client partial key could not be sent" << std::endl;
             return 1;
         }
         std::cerr << "Partial key sent to: " << client.cert.subjectName << std::endl;
@@ -271,6 +276,39 @@ int Client::readPartialKey(AuthMSG messageAuth, std::string &partialKey)
     clientMsg.deserialize(messageAuth.msg);
     clientMsg.decryptNonce(privateKey);
     partialKey = clientMsg.nonce;
+
+    return 0;
+}
+
+int Client::sendMessage(std::string message)
+{
+    int nBytes;
+
+    // Create chat message and encrypt it with the shared key
+    ChatMSG chat;
+    chat.message = message;
+    chat.encryptMessage(this->partialKey);
+
+    // Create message without authenticated integrity check
+    AuthMSG clientAuth(&chat, cert.subjectName, std::string());
+
+    nBytes = clientAuth.sendMSG(serverSocket);
+    if (nBytes <= 0) {
+        std::cerr << "Client message could not be sent" << std::endl;
+        return 1;
+    }
+    std::cout << "Sent: '" << message << "'" << std::endl;
+
+    return 0;
+}
+
+int Client::readMessage(AuthMSG messageAuth, std::string &message)
+{
+    // Read in and decrypt message
+    ChatMSG clientMsg;
+    clientMsg.deserialize(messageAuth.msg);
+    clientMsg.decryptMessage(partialKey);
+    message = clientMsg.message;
 
     return 0;
 }
@@ -453,9 +491,9 @@ int main(int argc, char* argv[])
         if (_kbhit()) 
         {
             std::string input;
-            std::cin >> input;
+            std::getline(std::cin, input);
 
-            if (client.state != agreeing)
+            if (client.state == ready)
             {
                 // If the user wants to connect
                 if(input == "y") {
@@ -467,6 +505,10 @@ int main(int argc, char* argv[])
                 else {
                     return 1;
                 }
+            }
+            if (client.state == chatting)
+            {
+                client.sendMessage(input);
             }
         }
         

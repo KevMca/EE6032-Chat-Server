@@ -18,7 +18,55 @@ std::string Encryption::generateNonce(size_t size)
     return nonceString;
 }
 
-void Encryption::encrypt(std::string &plain, std::string &cipher, CryptoPP::RSA::PublicKey publicKey)
+int Encryption::symEncrypt(std::string &plain, std::string &cipher, std::string sharedKey, CryptoPP::SecByteBlock iv)
+{
+    using namespace CryptoPP;
+
+    try
+    {
+        // Setup encryption type to use AES in Cipher Block Chaining (CBC) mode
+        CBC_Mode< AES >::Encryption e;
+        e.SetKeyWithIV((const byte*)sharedKey.data(), sharedKey.size(), (const byte*)iv.data());
+
+        // Create encryption pipeline to pipe plaintext to cipher
+        StringSource s(plain, true,
+            new StreamTransformationFilter(e, new StringSink(cipher))
+        );
+    }
+    catch(const Exception& err)
+    {
+        std::cerr << err.what() << std::endl;
+        return 1;
+    }
+
+    return 0;
+}
+
+int Encryption::symDecrypt(std::string &cipher, std::string &recovered, std::string sharedKey, CryptoPP::SecByteBlock iv)
+{
+    using namespace CryptoPP;
+
+    try
+    {
+        // Setup decryption type to use AES in Cipher Block Chaining (CBC) mode
+        CBC_Mode< AES >::Decryption d;
+        d.SetKeyWithIV((const byte*)sharedKey.data(), sharedKey.size(), iv);
+
+        // Create decryption pipeline to pipe ciphertext to recovered plaintext
+        StringSource s(cipher, true, 
+            new StreamTransformationFilter(d, new StringSink(recovered))
+        );
+    }
+    catch(const Exception& e)
+    {
+        std::cerr << e.what() << std::endl;
+        return 1;
+    }
+
+    return 0;
+}
+
+void Encryption::asymEncrypt(std::string &plain, std::string &cipher, CryptoPP::RSA::PublicKey publicKey)
 {
     using namespace CryptoPP;
 
@@ -31,7 +79,7 @@ void Encryption::encrypt(std::string &plain, std::string &cipher, CryptoPP::RSA:
     );
 }
 
-void Encryption::decrypt(std::string &cipher, std::string &recovered, CryptoPP::RSA::PrivateKey privateKey)
+void Encryption::asymDecrypt(std::string &cipher, std::string &recovered, CryptoPP::RSA::PrivateKey privateKey)
 {
     using namespace CryptoPP;
 

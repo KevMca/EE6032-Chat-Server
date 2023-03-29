@@ -293,18 +293,38 @@ int Server::echoMessage(std::string msg)
     clientAuth.deserialize(msg);
 
     ClientSession client;
-    err = getClientSession(clientAuth.destination, client);
-    if(err != 0)
+    // If the destination is not specified, broadcast the message to everyone except the source
+    if (clientAuth.destination.empty())
     {
-        std::cerr << "The destination for message is unknown to the server" << std::endl;
-        return 1;
+        for(ClientSession &client : clients) 
+        {
+            if (client.cert.subjectName != clientAuth.source)
+            {
+                nBytes = clientAuth.sendMSG(client.socket);
+                if (nBytes == 0) { 
+                    std::cerr << "Client message could not be echoed" << std::endl;
+                    return 1;
+                }
+            }
+        }
     }
+    // If the destination is specified, send to that specific client only
+    else 
+    {
+        err = getClientSession(clientAuth.destination, client);
+        if(err != 0)
+        {
+            std::cerr << "The destination for message is unknown to the server" << std::endl;
+            return 1;
+        }
 
-    nBytes = clientAuth.sendMSG(client.socket);
-    if (nBytes == 0) { 
-        std::cerr << "Client message could not be echoed" << std::endl;
-        return 1;
+        nBytes = clientAuth.sendMSG(client.socket);
+        if (nBytes == 0) { 
+            std::cerr << "Client message could not be echoed" << std::endl;
+            return 1;
+        }
     }
+    
 
     return 0;
 }
