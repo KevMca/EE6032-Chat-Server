@@ -515,26 +515,6 @@ int main(int argc, char* argv[])
         
     }
 
-    // Listen for messages from server
-    while(1) {
-        // Receive socket
-        // If message received, decrypt and print
-        
-        // Receive keyboard
-        // If input received, print, encrypt and send
-    }
-
-    // Wait for input from user to see other clients connected to server
-    //std::cout << "Press ENTER to see other connected users: ";
-    //std::cin.ignore();
-    //client.requestUsers();
-
-    //std::cout << "Press ENTER to connect to these users: ";
-    //std::cin.ignore();
-    //client.requestUsers();
-    
-    // THen wait for input to connect to other clients
-
     system("pause");
     return 0;
 }
