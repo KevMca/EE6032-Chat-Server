@@ -71,7 +71,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
         std::cerr << "Client certificate could not be sent" << std::endl;
         return 1;
     }
-    std::cerr << "Client certificate sent: " << nBytes << std::endl;
+    std::cerr << "Client certificate sent" << std::endl;
 
     // 2(a) Receive server certificate
     CertMSG serverMsg;
@@ -207,7 +207,6 @@ int Client::readServer(Certificate CACert)
             if (isAgreementComplete())
             {
                 state = chatting;
-                std::cout << "Shared key: " << this->partialKey << std::endl;
                 std::cout << "Agreement complete" << std::endl;
             }
         }
@@ -387,7 +386,9 @@ bool Client::updateClients(Certificate &clientCert)
 
 void Client::printClients(void)
 {
-    std::cout << "\nName" << std::endl;
+    system("cls");
+    std::cout << this->cert.subjectName << "\n----------" << std::endl;
+    std::cout << "\nClients" << std::endl;
     std::cout << "-------------------------------------------" << std::endl;
     for(ClientSession client : clients) {
         std::cout << client.cert.subjectName << std::endl;
@@ -462,7 +463,7 @@ int main(int argc, char* argv[])
     Certificate CACert(publicCAName);
 
     Client client(privateName, publicName);
-    std::cout << client.cert.subjectName << "\n ----------" << std::endl;
+    std::cout << client.cert.subjectName << "\n----------" << std::endl;
 
     err = client.start();
     if (err != 0) { return 1; }
