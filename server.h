@@ -87,10 +87,10 @@ class Server {
         // Returns -> 0 if no errors, 1 if there was an error
         int start(char *serverIP, u_short port);
 
-        // Checks if there are any pending connections and accepts the connection after some checks
+        // Checks if there are any pending connections and start the verification process for the client
         // Inputs -> CACert: the certificate of the certificate authority
         // Returns -> 0 if a client was accepted, 1 if there was an error or no client was accepted
-        int acceptClients(Certificate CACert);
+        int readClientConnections(Certificate CACert);
 
         // Sends any buffered messages to clients
         // Inputs -> serverIP: the IP address of the server
@@ -129,11 +129,26 @@ class Server {
         // Returns -> 0 if no errors, 1 if the response did not match challenge or message could not be sent
         int verifyClientResponse(std::string msg, ClientSession &client);
 
+        // Sends the certificates of all of the connected clients to the each client
+        // Returns -> 0
         int sendClientUpdate(void);
 
+        // Sends the certificates of all of the connected clients to a single client
+        // Inputs -> recipient: the session of the client to send the update to
+        //           client: the client to send the response to
+        // Returns -> 0 if no errors, 1 if the certificate could not be sent
         int sendClientSessions(ClientSession &recipient);
 
+        // Reads a message from a client and passes on the message to the
+        // intended recipient. If no destination is provided in the message
+        // it is broadcast to every client
+        // Inputs -> msg: a string containing the serialised message
+        // Returns -> 0 if no errors, 1 if the message could not be sent, or the destination is unknown
         int echoMessage(std::string msg);
 
+        // Retrieves a client session, given the client's name
+        // Inputs -> subjectName: the name of the client
+        // Outputs -> session: the session of the client
+        // Returns -> 0 if no errors, 1 if the client name does not match any known client session
         int getClientSession(std::string subjectName, ClientSession &session);
 };

@@ -7,6 +7,23 @@
 // https://www.daniweb.com/programming/software-development/threads/6811/winsock-multi-client-servers
 
 #include "server.h"
+#include "logging.h"
+
+
+/* Parameters */
+
+
+// Log filename
+std::string logName = "logs/server.log";
+
+// IP Information
+char *serverIP = "127.0.0.1";
+u_short port = 8080;
+
+// Certificates
+const char *privateName = "certs/server_private.der";
+const char *publicName  = "certs/server_public.der";
+const char *publicCAName  = "certs/root_public.der";
 
 
 /* ClientSession */
@@ -42,21 +59,21 @@ int Server::start(char *serverIP, u_short port)
     // Initialize Winsock
     err = WSAStartup(MAKEWORD(2,2), &wsaData);
     if (err != 0) {
-        std::cout << "WSAStartup failed with error: " << err << std::endl;
+        std::cerr << "WSAStartup failed with error: " << err << std::endl;
         return 1;
     }
 
     // Creating IPv4 socket object
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket == INVALID_SOCKET) {
-        std::cout << "Server socket setup failed with error: " << serverSocket << std::endl;
+        std::cerr << "Server socket setup failed with error: " << serverSocket << std::endl;
         return 1;
     }
 
     // Forcefully (SO_REUSEADDR) attaching socket to the port
     err = setsockopt(serverSocket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     if (err != 0) {
-        std::cout << "Setting socket option (setsockopt) failed with error: " << err << std::endl;
+        std::cerr << "Setting socket option (setsockopt) failed with error: " << err << std::endl;
         return 1;
     }
 
@@ -67,7 +84,7 @@ int Server::start(char *serverIP, u_short port)
 
     err = bind(serverSocket, (struct sockaddr*)&serverAddress, addrlen);
     if (err != 0) {
-        std::cout << "Bind failed with error: " << err << std::endl;
+        std::cerr << "Bind failed with error: " << err << std::endl;
         return 1;
     }
 
@@ -85,7 +102,7 @@ int Server::start(char *serverIP, u_short port)
     return 0;
 }
 
-int Server::acceptClients(Certificate CACert)
+int Server::readClientConnections(Certificate CACert)
 {
     int err;
     SOCKET clientSocket;
@@ -119,7 +136,7 @@ int Server::readClients(void)
             switch(client.state)
             {
                 case disconnected:
-                    std::cout << "Received message from disconnected client" << std::endl;
+                    Logger("Received message from disconnected client", logName);
                     break;
                 case sendingCert:
                     verifyClientCert(buffer, client);
@@ -128,11 +145,11 @@ int Server::readClients(void)
                 case sendingChallenge:
                     verifyClientResponse(buffer, client);
                     sendClientUpdate();
-                    std::cout << "Client verified" << std::endl;
+                    Logger("Client verified", logName);
                     break;
                 case connected:
                     echoMessage(buffer);
-                    std::cout << "Received message from connected client" << std::endl;
+                    Logger("Received message from connected client", logName);
                     break;
             }
 
@@ -145,12 +162,20 @@ int Server::readClients(void)
 
 void Server::printClients(void)
 {
-    std::cout << "\nName                | State" << std::endl;
+    system("cls");
+    std::cout << this->cert.subjectName << "\n----------" << std::endl;
+
+    // Print client list
+    std::cout << "\nClients             | State" << std::endl;
     std::cout << "-------------------------------------------" << std::endl;
     for(ClientSession client : clients) {
         std::cout << std::setw(20) << client.cert.subjectName << "| ";
         std::cout << std::setw(20) << clientStateStrings[client.state + 2] << std::endl;
     }
+
+    // Print log file
+    std::ifstream f(logName);
+    std::cout << std::endl << f.rdbuf();
 }
 
 
@@ -350,14 +375,9 @@ int main(int argc, char* argv[])
 {
     int err, nBytes;
 
-    // IP Information
-    char *serverIP = "127.0.0.1";
-    u_short port = 8080;
-
-    // Certificates
-    const char *privateName = "certs/server_private.der";
-    const char *publicName  = "certs/server_public.der";
-    const char *publicCAName  = "certs/root_public.der";
+    // Clear log file
+    std::ofstream file(logName);
+    file.close();
 
     // Read CA certificate
     Certificate CACert(publicCAName);
@@ -365,17 +385,15 @@ int main(int argc, char* argv[])
     // Start server
     Server server(privateName, publicName);
     server.CACert = CACert;
-    std::cout << server.cert.subjectName << "\n ----------" << std::endl;
 
     err = server.start(serverIP, port);
     if (err != 0) { return 1; }
-    std::cout << "Server started" << std::endl;
+    Logger("Server started", logName);
 
     while(true)
     {
-        server.acceptClients(CACert);	//Receive connections
-        //server.sendClients();		    //Send data to clients
-        server.readClients();		    //Recive data from clients
+        server.readClientConnections(CACert);	//Handle any connection requests
+        server.readClients();		            //Recive data from clients
     }
 
     system("pause");

@@ -1,8 +1,10 @@
 build/
 cryptopp-pem/
 certs/
+logs/
 *.exe
 *.obj
 *.pdb
 *.der
+*.log
 .vscode
