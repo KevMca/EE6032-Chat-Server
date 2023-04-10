@@ -26,14 +26,6 @@
 
 #define DEFAULT_BUFLEN 4096
 
-enum messageType
-{
-    certificate = 0,
-    challenge = 1,
-    agreement = 2,
-    message = 3,
-};
-
 // A base abstract class for all messages to be sent in the protocol. Each message requires some
 // basic functions for serialization and communication over sockets
 class BaseMSG 
