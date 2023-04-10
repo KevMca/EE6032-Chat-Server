@@ -55,7 +55,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
 {
     int err, nBytes;
     bool isVerified;
-    std::string clientChallenge, serverChallenge, serverResponse;
+    std::string Nc, Ns, serverResponse;
 
     err = setupServerSocket(serverIP, port);
     if (err != 0) {
@@ -64,7 +64,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
 
     // 1 Send client certificate
     CertMSG clientMsg(cert);
-    AuthMSG clientAuth(&clientMsg, cert.subjectName, "Server", privateKey);
+    AppMSG clientAuth(&clientMsg, cert.subjectName, "Server", privateKey);
 
     nBytes = clientAuth.sendMSG(serverSocket);
     if (nBytes <= 0) {
@@ -73,19 +73,19 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     }
     std::cerr << "Client certificate sent" << std::endl;
 
-    // 2(a) Receive server certificate
+    // 2. Receive server certificate
     CertMSG serverMsg;
-    AuthMSG serverAuth;
+    AppMSG serverAuth;
     nBytes = serverAuth.readMSG(serverSocket);
     if (nBytes <= 0) {
         std::cerr << "Server certificate could not be read" << std::endl;
         return 1;
     }
 
-    // Extract certificate
+    // 2(a) Deserialise message
     serverMsg.deserialize(serverAuth.msg);
     serverMsg.decryptNonce(privateKey);
-    serverChallenge = serverMsg.nonce;
+    Ns = serverMsg.nonce;
     serverCert = serverMsg.cert;
 
     // 2(b) Verify digital signature
@@ -102,12 +102,12 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
         return 1;
     }
 
-    // 3 Send challenge-response
-    ChallengeMSG clientCR(serverChallenge);
+    // 3. Send challenge-response
+    ChallengeMSG clientCR(Ns);
     clientCR.generateChallenge();
-    clientChallenge = clientCR.challenge;
+    Nc = clientCR.challenge;
     clientCR.encryptNonces(serverCert.publicKey);
-    AuthMSG clientCRAuth(&clientCR, cert.subjectName, serverCert.subjectName, privateKey);
+    AppMSG clientCRAuth(&clientCR, cert.subjectName, serverCert.subjectName, privateKey);
 
     nBytes = clientCRAuth.sendMSG(serverSocket);
     if (nBytes <= 0) {
@@ -117,7 +117,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
 
     // 4(a) Read response
     ChallengeMSG serverCR;
-    AuthMSG serverCRAuth;
+    AppMSG serverCRAuth;
 
     nBytes = serverCRAuth.readMSG(serverSocket);
     if (nBytes <= 0) {
@@ -131,7 +131,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     serverResponse = serverCR.response;
 
     // 4(b) Verify response
-    if (clientChallenge != serverResponse) {
+    if (Nc != serverResponse) {
         std::cerr << "Server response did not match challenge" << std::endl;
         return 1;
     }
@@ -152,7 +152,7 @@ int Client::readServer(Certificate CACert)
         return 1;
     }
 
-    AuthMSG messageAuth;
+    AppMSG messageAuth;
     messageAuth.deserialize(buffer);
 
     if(messageAuth.source == "Server") {
@@ -214,7 +214,7 @@ int Client::readServer(Certificate CACert)
             std::string message;
             readMessage(messageAuth, message);
 
-            std::cout << "Received message from " << messageAuth.source << ": " << message << std::endl;
+            std::cout << messageAuth.source << ": " << message << std::endl;
         }
     }
 
@@ -237,7 +237,7 @@ int Client::sendPartialKey(void)
         clientMsg.encryptNonce(client.cert.publicKey);
 
         // Create authenticated integrity message
-        AuthMSG clientAuth(&clientMsg, cert.subjectName, client.cert.subjectName, privateKey);
+        AppMSG clientAuth(&clientMsg, cert.subjectName, client.cert.subjectName, privateKey);
 
         nBytes = clientAuth.sendMSG(serverSocket);
         if (nBytes <= 0) {
@@ -250,7 +250,7 @@ int Client::sendPartialKey(void)
     return 0;
 }
 
-int Client::readPartialKey(AuthMSG messageAuth, std::string &partialKey)
+int Client::readPartialKey(AppMSG messageAuth, std::string &partialKey)
 {
     int err;
     bool isVerified;
@@ -289,7 +289,7 @@ int Client::sendMessage(std::string message)
     chat.encryptMessage(this->partialKey);
 
     // Create message without authenticated integrity check
-    AuthMSG clientAuth(&chat, cert.subjectName, std::string());
+    AppMSG clientAuth(&chat, cert.subjectName, std::string());
 
     nBytes = clientAuth.sendMSG(serverSocket);
     if (nBytes <= 0) {
@@ -301,7 +301,7 @@ int Client::sendMessage(std::string message)
     return 0;
 }
 
-int Client::readMessage(AuthMSG messageAuth, std::string &message)
+int Client::readMessage(AppMSG messageAuth, std::string &message)
 {
     // Read in and decrypt message
     ChatMSG clientMsg;
@@ -312,7 +312,7 @@ int Client::readMessage(AuthMSG messageAuth, std::string &message)
     return 0;
 }
 
-int Client::readCertificate(AuthMSG messageAuth, Certificate CACert, Certificate &newCert)
+int Client::readCertificate(AppMSG messageAuth, Certificate CACert, Certificate &newCert)
 {
     // Verify digital signature
     bool isVerified = messageAuth.verify(serverCert.publicKey);
