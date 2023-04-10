@@ -2,32 +2,9 @@
 #include "protocol.h"
 
 
-/* SockMSG */
+/* BaseMSG */
 
-
-void SockMSG::serializeString(std::ostream &out, std::string data)
-{
-    out << data.size();
-    out << ',';
-    out << data;
-    out << ',';
-}
-
-void SockMSG::deserializeString(std::istream &in, std::string &data)
-{
-    int len = 0;
-    char comma;
-    in >> len;
-    in >> comma;
-    if (in && len) {
-        std::vector<char> tmp(len);
-        in.read(tmp.data(), len);
-        data.assign(tmp.data(), len);
-    }
-    in >> comma;
-}
-
-int SockMSG::readMSG(SOCKET socket)
+int BaseMSG::readMSG(SOCKET socket)
 {
     char buffer[DEFAULT_BUFLEN] = { 0 };
     int nBytes = recv(socket, buffer, DEFAULT_BUFLEN, 0);
@@ -39,13 +16,35 @@ int SockMSG::readMSG(SOCKET socket)
     return nBytes;
 }
 
-int SockMSG::sendMSG(SOCKET socket)
+int BaseMSG::sendMSG(SOCKET socket)
 {
     std::string serial = serialize();
     const char *msg = serial.c_str();
     int nBytes = send(socket, msg, (int)strlen(msg), 0);
 
     return nBytes;
+}
+
+void BaseMSG::serializeString(std::ostream &out, std::string data)
+{
+    out << data.size();
+    out << ',';
+    out << data;
+    out << ',';
+}
+
+void BaseMSG::deserializeString(std::istream &in, std::string &data)
+{
+    int len = 0;
+    char comma;
+    in >> len;
+    in >> comma;
+    if (in && len) {
+        std::vector<char> tmp(len);
+        in.read(tmp.data(), len);
+        data.assign(tmp.data(), len);
+    }
+    in >> comma;
 }
 
 
@@ -178,9 +177,10 @@ void ChallengeMSG::deserialize(std::string str)
     );
 }
 
-void ChallengeMSG::generateChallenge(void)
+std::string ChallengeMSG::generateChallenge(void)
 {
     this->challenge = Encryption::generateNonce();
+    return this->challenge;
 }
 
 void ChallengeMSG::encryptNonces(CryptoPP::RSA::PublicKey publicKey)
@@ -344,17 +344,17 @@ void ChatMSG::decryptMessage(std::string sharedKey)
 }
 
 
-/* AuthMSG */
+/* AppMSG */
 
 
-AuthMSG::AuthMSG()
+AppMSG::AppMSG()
 {
 
 }
 
 
 
-AuthMSG::AuthMSG(SockMSG *msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey)
+AppMSG::AppMSG(BaseMSG *msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey)
 {
     this->type = typeid(*msg).name() + 6;
     this->source = source;
@@ -363,7 +363,7 @@ AuthMSG::AuthMSG(SockMSG *msg, std::string source, std::string destination, Cryp
     this->signature = createSignature(privateKey);
 }
 
-AuthMSG::AuthMSG(std::string msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey)
+AppMSG::AppMSG(std::string msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey)
 {
     this->type = "undefined";
     this->source = source;
@@ -372,7 +372,7 @@ AuthMSG::AuthMSG(std::string msg, std::string source, std::string destination, C
     this->signature = createSignature(privateKey);
 }
 
-AuthMSG::AuthMSG(SockMSG *msg, std::string source, std::string destination)
+AppMSG::AppMSG(BaseMSG *msg, std::string source, std::string destination)
 {
     this->type = typeid(*msg).name() + 6;
     this->source = source;
@@ -380,7 +380,7 @@ AuthMSG::AuthMSG(SockMSG *msg, std::string source, std::string destination)
     this->msg = msg->serialize();
 }
 
-AuthMSG::AuthMSG(std::string msg, std::string source, std::string destination)
+AppMSG::AppMSG(std::string msg, std::string source, std::string destination)
 {
     this->type = "undefined";
     this->source = source;
@@ -388,7 +388,7 @@ AuthMSG::AuthMSG(std::string msg, std::string source, std::string destination)
     this->msg = msg;
 }
 
-std::string AuthMSG::serialize(void)
+std::string AppMSG::serialize(void)
 {
     std::stringstream out;
     std::string str;
@@ -404,7 +404,7 @@ std::string AuthMSG::serialize(void)
     return str;
 }
 
-void AuthMSG::deserialize(std::string str)
+void AppMSG::deserialize(std::string str)
 {
     std::stringstream in;
     in.str(str);
@@ -416,7 +416,7 @@ void AuthMSG::deserialize(std::string str)
     deserializeString(in, signature);
 }
 
-bool AuthMSG::verify(CryptoPP::RSA::PublicKey publicKey)
+bool AppMSG::verify(CryptoPP::RSA::PublicKey publicKey)
 {
     using namespace CryptoPP;
 
@@ -437,7 +437,7 @@ bool AuthMSG::verify(CryptoPP::RSA::PublicKey publicKey)
     return result;
 }
 
-std::string AuthMSG::createSignature(CryptoPP::RSA::PrivateKey privateKey)
+std::string AppMSG::createSignature(CryptoPP::RSA::PrivateKey privateKey)
 {
     using namespace CryptoPP;
 
