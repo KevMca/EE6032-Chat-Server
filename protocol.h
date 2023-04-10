@@ -1,6 +1,9 @@
 // Sources:
 // https://stackoverflow.com/questions/7046244/serializing-a-class-which-contains-a-stdstring
 
+#ifndef PROTOCOL_H
+#define PROTOCOL_H
+
 #include <iostream>
 #include <ostream>
 #include <istream>
@@ -32,29 +35,19 @@ enum messageType
 };
 
 // A base abstract class for all messages to be sent in the protocol. Each message requires some
-// basic functions like serialization and sending over sockets
-class SockMSG 
+// basic functions for serialization and communication over sockets
+class BaseMSG 
 {
     public:
-        // Send a message object over a specific socket
+        // Serialize the current message and send it over a specific socket
         // Inputs -> socket: the socket to use to send the data
         // Returns -> the number of bytes sent
-        virtual int sendMSG(SOCKET socket);
+        int sendMSG(SOCKET socket);
 
-        // Read a message object over a specific socket
+        // Read a message object over a specific socket and deserialize the socket message
         // Inputs -> socket: the socket to use to read the data
         // Returns -> the number of bytes read
-        virtual int readMSG(SOCKET socket);
-
-        // Converts the contents of a message into a hex string. This function must be implemented
-        // in each derived class of this base class.
-        // Returns -> the serialized contents of the message
-        virtual std::string serialize(void) = 0;
-
-        // Converts the serialized contents of the message into a message object. This function
-        // must be implemented in each derived class of this base class.
-        // Inputs -> str: the serialized contents of the message
-        virtual void deserialize(std::string str) = 0;
+        int readMSG(SOCKET socket);
 
         // A standard way to convert a std::string to a hex string which can be easily sent over a
         // network
@@ -66,26 +59,39 @@ class SockMSG
         // Inputs -> in: the stringstream object used to compile strings
         //           data: the data that contains information about a std::string
         void deserializeString(std::istream &in, std::string &data);
+
+        /* Virtual functions to be implemented with each message */
+
+        // Converts the contents of a message into a hex string. This function must be implemented
+        // in each derived class of this base class.
+        // Returns -> the serialized contents of the message
+        virtual std::string serialize(void) = 0;
+
+        // Converts the serialized contents of the message into a message object. This function
+        // must be implemented in each derived class of this base class.
+        // Inputs -> str: the serialized contents of the message
+        virtual void deserialize(std::string str) = 0;
 };
 
-// Represents a socket message including a certificate and a nonce, used for verification and 
-// freshness. The nonce can be optionally encrypted if the recipient's cert is known
+// A message containing a certificate and a nonce, used for verification or freshness. The nonce
+// can be encrypted if the recipient's cert is known
 // Notation: {CA<<A>>, N}
 // Sending Example:
 //      CertMSG clientCertMsg(cert);
 // Receiving Example:
 //      CertMSG clientCertMsg;
 //      clientCertMsg.deserialize(socketMsg)
-class CertMSG: public SockMSG
+class CertMSG: public BaseMSG
 {
     public:
         Certificate cert;
         std::string nonce;
         bool encrypted = NULL; // (Not encrypted: false, Encrypted: true, Unknown: NULL)
 
+        // Empty CertMSG constructor which does not generate a nonce
         explicit CertMSG();
 
-        // Constructs a CertMSG from a Certificate object
+        // Constructs a CertMSG from a Certificate object and generates a nonce
         explicit CertMSG(Certificate cert);
 
         // Converts the contents of the certificate and nonce into a hex string
@@ -105,20 +111,22 @@ class CertMSG: public SockMSG
         void decryptNonce(CryptoPP::RSA::PrivateKey privateKey);
 };
 
-// Represents a socket message with a challenge nonce and a response nonce
+// Represents a socket message with a challenge nonce and a response nonce. The nonces can be
+// encrypted if the recipient's cert is known
 // Notation: {Nc, Nr}
 // Sending Example:
 //      ChallengeMSG challengeMsg(response);
 // Receiving Example:
 //      ChallengeMSG challengeMsg;
 //      challengeMsg.deserialize(socketMsg);
-class ChallengeMSG: public SockMSG
+class ChallengeMSG: public BaseMSG
 {
     public:
         std::string challenge = "";
         std::string response = "";
         bool encrypted = NULL; // (Not encrypted: false, Encrypted: true, Unknown: NULL)
 
+        // Empty ChallengeMSG constructor
         explicit ChallengeMSG();
 
         // Constructs a ChallengeMSG with a response
@@ -133,7 +141,7 @@ class ChallengeMSG: public SockMSG
         void deserialize(std::string str);
 
         // Generates a random challenge nonce
-        void generateChallenge(void);
+        std::string generateChallenge(void);
 
         // Encrypts the nonces so only the recipient can access it
         // Inputs -> publicKey: the public key of the recipient
@@ -146,12 +154,13 @@ class ChallengeMSG: public SockMSG
 
 // Represents a socket message with a nonce used for key agreement
 // Notation: {N}k_r
-class AgreementMSG: public SockMSG
+class AgreementMSG: public BaseMSG
 {
     public:
         std::string nonce;
         bool encrypted = NULL; // (Not encrypted: false, Encrypted: true, Unknown: NULL)
 
+        // Empty AgreementMSG constructor
         explicit AgreementMSG();
 
         // Converts the nonce to a hex string
@@ -174,15 +183,17 @@ class AgreementMSG: public SockMSG
         void decryptNonce(CryptoPP::RSA::PrivateKey privateKey);
 };
 
-// Represents a socket message with a nonce used for key agreement
+// Represents a socket message with an encrypted chat message and the IV used to encrypt the
+// message
 // Notation: {Msg}k_abc
-class ChatMSG: public SockMSG
+class ChatMSG: public BaseMSG
 {
     public:
         std::string message;
         CryptoPP::SecByteBlock iv;
         bool encrypted = NULL; // (Not encrypted: false, Encrypted: true, Unknown: NULL)
 
+        // Empty ChatMSG constructor
         explicit ChatMSG();
 
         // Converts the chat message to a hex string
@@ -202,15 +213,16 @@ class ChatMSG: public SockMSG
         void decryptMessage(std::string sharedKey);
 };
 
-// Represents a message with an authenticated integrity check
-// Notation: {msg, {H(msg)}_k^-1}
+// A generic message wrapper for sending messages within the chat server application. It gives the
+// option for authenticated integrity, type information and source and destination information
+// Notation: {type, source, destination, msg, {H(msg)}_k^-1}
 // Sending Example:
-//      AuthMSG clientCertMsgAuth(&clientCertMsg, privateKey);
+//      AppMSG clientCertMsgAuth(&clientCertMsg, privateKey);
 // Receiving Example:
-//      AuthMSG serverCertMsgAuth;
-//      nBytes = serverCertMsgAuth.readMSG(serverSocket);
+//      AppMSG serverCertMsgAuth;
+//      nBytes = serverCertMsgAuth.read(serverSocket);
 //      isVerified = serverCertMsgAuth.verify(cert.publicKey);
-class AuthMSG: public SockMSG
+class AppMSG: public BaseMSG
 {
     public:
         std::string type;
@@ -219,34 +231,43 @@ class AuthMSG: public SockMSG
         std::string msg;
         std::string signature;
 
-        explicit AuthMSG();
+        explicit AppMSG();
 
-        // Constructs an AuthMSG object from a SockMSG derived object
-        // Inputs -> msg: a pointer to a SockMSG derived object
+        // Constructs an AppMSG object from a BaseMSG derived object and creates digital signature
+        // Inputs -> msg: a pointer to a BaseMSG derived object
         //           source: the name of the source entity
         //           destination: the name of the destination entity
         //           privateKey: the private key used to sign the message
-        explicit AuthMSG(SockMSG *msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey);
+        explicit AppMSG(BaseMSG *msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey);
 
-        // Constructs an AuthMSG object from a string
+        // Constructs an AppMSG object from a string and creates digital signature
         // Inputs -> msg: the hex string of a message to sign
         //           source: the name of the source entity
         //           destination: the name of the destination entity
         //           privateKey: the private key used to sign the message
-        explicit AuthMSG(std::string msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey);
+        explicit AppMSG(std::string msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey);
 
-        explicit AuthMSG(SockMSG *msg, std::string source, std::string destination);
-        explicit AuthMSG(std::string msg, std::string source, std::string destination);
+        // Constructs an AppMSG object from a BaseMSG derived object without digital signature
+        // Inputs -> msg: a pointer to a BaseMSG derived object
+        //           source: the name of the source entity
+        //           destination: the name of the destination entity
+        explicit AppMSG(BaseMSG *msg, std::string source, std::string destination);
+
+        // Constructs an AppMSG object from a string without digital signature
+        // Inputs -> msg: the hex string of a message to sign
+        //           source: the name of the source entity
+        //           destination: the name of the destination entity
+        explicit AppMSG(std::string msg, std::string source, std::string destination);
         
         // Converts the contents of the message and signature into a hex string
         // Returns -> the serialized contents of the message
         std::string serialize(void);
 
-        // Converts the serialized contents of the string into an AuthMSG object
+        // Converts the serialized contents of the string into an AppMSG object
         // Inputs -> str: the serialized contents of the message
         void deserialize(std::string str);
 
-        // Verifies if the signature of an AuthMSG matches the message
+        // Verifies if the signature of an AppMSG matches the message
         // Inputs -> publicKey: the public key of the sender
         // Returns -> if the signature matches the message
         bool verify(CryptoPP::RSA::PublicKey publicKey);
@@ -256,3 +277,5 @@ class AuthMSG: public SockMSG
         // Returns -> the signature of the message
         std::string createSignature(CryptoPP::RSA::PrivateKey privateKey);
 };
+
+#endif
