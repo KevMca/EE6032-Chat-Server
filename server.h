@@ -50,7 +50,7 @@ class ClientSession {
         clientState state = disconnected;
         Certificate cert;
         SOCKET socket = INVALID_SOCKET;
-        std::string serverChallenge;
+        std::string Ns;
 
         ClientSession();
         ClientSession(SOCKET socket);

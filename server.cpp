@@ -99,6 +99,8 @@ int Server::start(char *serverIP, u_short port)
     unsigned long b=1;
 	ioctlsocket(serverSocket,FIONBIO,&b);
 
+    Logger("Server started", logName);
+
     return 0;
 }
 
@@ -106,7 +108,6 @@ int Server::readClientConnections(Certificate CACert)
 {
     int err;
     SOCKET clientSocket;
-    Certificate clientCert;
 
     // Accept any connections in the queue
     clientSocket = accept(serverSocket, (struct sockaddr*)&serverAddress, (int *)&addrlen);
@@ -118,6 +119,8 @@ int Server::readClientConnections(Certificate CACert)
     ClientSession client(clientSocket);
     client.state = sendingCert;
     clients.push_back(client);
+
+    Logger(client.cert.subjectName, logName);
 
     printClients();
 
@@ -149,7 +152,6 @@ int Server::readClients(void)
                     break;
                 case connected:
                     echoMessage(buffer);
-                    Logger("Received message from connected client", logName);
                     break;
             }
 
@@ -173,9 +175,12 @@ void Server::printClients(void)
         std::cout << std::setw(20) << clientStateStrings[client.state + 2] << std::endl;
     }
 
-    // Print log file
+    // Print log file if it is not empty
     std::ifstream f(logName);
-    std::cout << std::endl << f.rdbuf();
+    if (f.peek() != std::ifstream::traits_type::eof())
+    {
+        std::cout << std::endl << f.rdbuf();
+    }
 }
 
 
@@ -189,7 +194,7 @@ int Server::verifyClientCert(std::string msg, ClientSession &client)
 
     // 1(a) Read client certificate
     CertMSG clientMsg;
-    AuthMSG clientAuth;
+    AppMSG clientAuth;
     clientAuth.deserialize(msg);
 
     // Extract certificate
@@ -223,9 +228,9 @@ int Server::sendServerCert(ClientSession &client)
 
     // 2 Send server certificate
     CertMSG serverMsg(cert);
-    client.serverChallenge = serverMsg.nonce;
+    client.Ns = serverMsg.nonce;
     serverMsg.encryptNonce(client.cert.publicKey);
-    AuthMSG serverAuth(&serverMsg, cert.subjectName, client.cert.subjectName, privateKey);
+    AppMSG serverAuth(&serverMsg, cert.subjectName, client.cert.subjectName, privateKey);
 
     nBytes = serverAuth.sendMSG(client.socket);
     if (nBytes == 0) { 
@@ -243,7 +248,7 @@ int Server::verifyClientResponse(std::string msg, ClientSession &client)
 
     // 3(a) Read new challenge-response
     ChallengeMSG clientCR;
-    AuthMSG clientCRAuth;
+    AppMSG clientCRAuth;
     clientCRAuth.deserialize(msg);
 
     // Extract response
@@ -253,18 +258,18 @@ int Server::verifyClientResponse(std::string msg, ClientSession &client)
     clientResponse  = clientCR.response;
 
     // 3(b) Verify response
-    if (client.serverChallenge != clientResponse) {
+    if (client.Ns != clientResponse) {
         std::cerr << "Client response did not match challenge" << std::endl;
         client.state = unverified;
         return 1;
     }
 
-    client.serverChallenge.clear();
+    client.Ns.clear();
 
     // 4 Send challenge back
     ChallengeMSG serverCR(clientChallenge);
     serverCR.encryptNonces(client.cert.publicKey);
-    AuthMSG serverCRAuth(&serverCR, cert.subjectName, client.cert.subjectName, privateKey);
+    AppMSG serverCRAuth(&serverCR, cert.subjectName, client.cert.subjectName, privateKey);
 
     nBytes = serverCRAuth.sendMSG(client.socket);
     if (nBytes == 0) {
@@ -297,7 +302,7 @@ int Server::sendClientSessions(ClientSession &recipient)
         if (client.cert.subjectName != recipient.cert.subjectName)
         {
             CertMSG serverMsg(client.cert);
-            AuthMSG serverAuth(&serverMsg, cert.subjectName, recipient.cert.subjectName, privateKey);
+            AppMSG serverAuth(&serverMsg, cert.subjectName, recipient.cert.subjectName, privateKey);
 
             nBytes = serverAuth.sendMSG(recipient.socket);
             if (nBytes == 0) { 
@@ -314,8 +319,10 @@ int Server::echoMessage(std::string msg)
 {
     int nBytes, err;
 
-    AuthMSG clientAuth;
+    AppMSG clientAuth;
     clientAuth.deserialize(msg);
+
+    Logger("Received " + clientAuth.type + ", source: " + clientAuth.source + ", destination: " + clientAuth.destination, logName);
 
     ClientSession client;
     // If the destination is not specified, broadcast the message to everyone except the source
@@ -386,9 +393,10 @@ int main(int argc, char* argv[])
     Server server(privateName, publicName);
     server.CACert = CACert;
 
+    server.printClients();
+
     err = server.start(serverIP, port);
     if (err != 0) { return 1; }
-    Logger("Server started", logName);
 
     while(true)
     {
