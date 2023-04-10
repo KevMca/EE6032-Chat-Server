@@ -87,16 +87,16 @@ class Client {
 
         int sendMessage(std::string message);
 
-        int readMessage(AuthMSG messageAuth, std::string &message);
+        int readMessage(AppMSG messageAuth, std::string &message);
 
     private:
         WSADATA wsaData;
         int addrlen = sizeof(serverAddress);
 
 
-        int readPartialKey(AuthMSG messageAuth, std::string &partialKey);
+        int readPartialKey(AppMSG messageAuth, std::string &partialKey);
 
-        int readCertificate(AuthMSG messageAuth, Certificate CACert, Certificate &newCert);
+        int readCertificate(AppMSG messageAuth, Certificate CACert, Certificate &newCert);
 
         int incorporatePartialKey(std::string clientPartialKey);
 
