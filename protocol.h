@@ -73,9 +73,8 @@ class BaseMSG
         virtual void deserialize(std::string str) = 0;
 };
 
-// A message containing a certificate and a nonce, used for verification or freshness. The nonce
-// can be encrypted if the recipient's cert is known
-// Notation: {CA<<A>>, N}
+// A message containing a certificate
+// Notation: CA<<A>>
 // Sending Example:
 //      CertMSG clientCertMsg(cert);
 // Receiving Example:
@@ -85,8 +84,6 @@ class CertMSG: public BaseMSG
 {
     public:
         Certificate cert;
-        std::string nonce;
-        bool encrypted = NULL; // (Not encrypted: false, Encrypted: true, Unknown: NULL)
 
         // Empty CertMSG constructor which does not generate a nonce
         explicit CertMSG();
@@ -101,14 +98,6 @@ class CertMSG: public BaseMSG
         // Converts the serialized contents of the string into a CertMSG object
         // Inputs -> str: the serialized contents of the message
         void deserialize(std::string str);
-
-        // Encrypts the nonce so only the recipient can access it
-        // Inputs -> publicKey: the public key of the recipient
-        void encryptNonce(CryptoPP::RSA::PublicKey publicKey);
-
-        // Decrypts the nonce so the intended recipient can access it
-        // Inputs -> privateKey: the private key of the recipient
-        void decryptNonce(CryptoPP::RSA::PrivateKey privateKey);
 };
 
 // Represents a socket message with a challenge nonce and a response nonce. The nonces can be
@@ -154,38 +143,38 @@ class ChallengeMSG: public BaseMSG
 
 // Represents a socket message with a nonce used for key agreement
 // Notation: {N}k_r
-class AgreementMSG: public BaseMSG
+class PartialKeyMSG: public BaseMSG
 {
     public:
-        std::string nonce;
+        std::string partialKey;
         bool encrypted = NULL; // (Not encrypted: false, Encrypted: true, Unknown: NULL)
 
-        // Empty AgreementMSG constructor
-        explicit AgreementMSG();
+        // Empty PartialKeyMSG constructor
+        explicit PartialKeyMSG();
 
         // Converts the nonce to a hex string
         // Returns -> the serialized contents of the message
         std::string serialize(void);
 
-        // Converts the serialized contents of the string into a AgreementMSG object
+        // Converts the serialized contents of the string into a PartialKeyMSG object
         // Inputs -> str: the serialized contents of the message
         void deserialize(std::string str);
 
         // Generates a random challenge nonce
         void generateNonce(void);
 
-        // Encrypts the nonce so only the recipient can access it
+        // Encrypts the partial key so only the intended recipient can access it
         // Inputs -> publicKey: the public key of the recipient
-        void encryptNonce(CryptoPP::RSA::PublicKey publicKey);
+        void encryptPartialKey(CryptoPP::RSA::PublicKey publicKey);
 
-        // Decrypts the nonce so the intended recipient can access it
+        // Decrypts the partial key so only the intended recipient can access it
         // Inputs -> privateKey: the private key of the recipient
-        void decryptNonce(CryptoPP::RSA::PrivateKey privateKey);
+        void decryptPartialKey(CryptoPP::RSA::PrivateKey privateKey);
 };
 
 // Represents a socket message with an encrypted chat message and the IV used to encrypt the
 // message
-// Notation: {Msg}k_abc
+// Notation: {Msg}k_abc, IV
 class ChatMSG: public BaseMSG
 {
     public:
@@ -233,20 +222,6 @@ class AppMSG: public BaseMSG
 
         explicit AppMSG();
 
-        // Constructs an AppMSG object from a BaseMSG derived object and creates digital signature
-        // Inputs -> msg: a pointer to a BaseMSG derived object
-        //           source: the name of the source entity
-        //           destination: the name of the destination entity
-        //           privateKey: the private key used to sign the message
-        explicit AppMSG(BaseMSG *msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey);
-
-        // Constructs an AppMSG object from a string and creates digital signature
-        // Inputs -> msg: the hex string of a message to sign
-        //           source: the name of the source entity
-        //           destination: the name of the destination entity
-        //           privateKey: the private key used to sign the message
-        explicit AppMSG(std::string msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey);
-
         // Constructs an AppMSG object from a BaseMSG derived object without digital signature
         // Inputs -> msg: a pointer to a BaseMSG derived object
         //           source: the name of the source entity
@@ -274,8 +249,8 @@ class AppMSG: public BaseMSG
 
         // Creates a signature from a message
         // Inputs -> privateKey: the private key of the sender
-        // Returns -> the signature of the message
-        std::string createSignature(CryptoPP::RSA::PrivateKey privateKey);
+        // Outputs -> the hashed signature of the message
+        void sign(CryptoPP::RSA::PrivateKey privateKey);
 };
 
 #endif

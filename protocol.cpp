@@ -59,25 +59,17 @@ CertMSG::CertMSG()
 CertMSG::CertMSG(Certificate cert)
 {
     this->cert = cert;
-    this->nonce = Encryption::generateNonce();
-    encrypted = false;
 }
 
 std::string CertMSG::serialize(void)
 {
     std::stringstream out;
     std::string str;
-    std::string nonceString;
-
-    CryptoPP::StringSource ss2(nonce, true, 
-        new CryptoPP::HexEncoder( new CryptoPP::StringSink(nonceString) )
-    );
     
     // Serialize certificate
     serializeString(out, cert.subjectName);
     serializeString(out, cert.keyToString(cert.publicKey));
     serializeString(out, cert.signature);
-    serializeString(out, nonceString);
 
     str = out.str();
 
@@ -90,40 +82,16 @@ void CertMSG::deserialize(std::string str)
     in.str(str);
 
     Certificate cert;
-    std::string subjectName;
-    std::string publicKeyString;
-    std::string signature;    
-    std::string nonceCipher;
-
+    std::string subjectName, publicKeyString, signature;
+    
     deserializeString(in, subjectName);
     deserializeString(in, publicKeyString);
     deserializeString(in, signature);
-    deserializeString(in, nonceCipher);
 
     cert.subjectName = subjectName;
     cert.publicKey = cert.stringToKey<CryptoPP::RSA::PublicKey>(publicKeyString);
     cert.signature = signature;
     this->cert = cert;
-
-    CryptoPP::StringSource ss1(nonceCipher, true, 
-        new CryptoPP::HexDecoder( new CryptoPP::StringSink(this->nonce) )
-    );
-}
-
-void CertMSG::encryptNonce(CryptoPP::RSA::PublicKey publicKey)
-{
-    std::string cipher;
-    Encryption::asymEncrypt(nonce, cipher, publicKey);
-    nonce = cipher;
-    encrypted = true;
-}
-
-void CertMSG::decryptNonce(CryptoPP::RSA::PrivateKey privateKey)
-{
-    std::string recovered;
-    Encryption::asymDecrypt(nonce, recovered, privateKey);
-    nonce = recovered;
-    encrypted = false;
 }
 
 
@@ -205,68 +173,68 @@ void ChallengeMSG::decryptNonces(CryptoPP::RSA::PrivateKey privateKey)
     encrypted = false;
 }
 
-/* AgreementMSG */
+/* PartialKeyMSG */
 
 
-AgreementMSG::AgreementMSG()
+PartialKeyMSG::PartialKeyMSG()
 {
 
 }
 
-std::string AgreementMSG::serialize(void)
+std::string PartialKeyMSG::serialize(void)
 {
     std::stringstream out;
-    std::string str, nonceString;
+    std::string str, partialKeyString;
 
-    CryptoPP::StringSource ss1(nonce, true, 
-        new CryptoPP::HexEncoder( new CryptoPP::StringSink(nonceString) )
+    CryptoPP::StringSource ss1(this->partialKey, true, 
+        new CryptoPP::HexEncoder( new CryptoPP::StringSink(partialKeyString) )
     );
     
-    serializeString(out, nonceString);
+    serializeString(out, partialKeyString);
 
     str = out.str();
 
     return str;
 }
 
-void AgreementMSG::deserialize(std::string str)
+void PartialKeyMSG::deserialize(std::string str)
 {
     std::stringstream in;
-    std::string nonceHex;
+    std::string partialKeyHex;
     in.str(str);
 
-    deserializeString(in, nonceHex);
+    deserializeString(in, partialKeyHex);
 
-    CryptoPP::StringSource ss1(nonceHex, true, 
-        new CryptoPP::HexDecoder( new CryptoPP::StringSink(this->nonce) )
+    CryptoPP::StringSource ss1(partialKeyHex, true, 
+        new CryptoPP::HexDecoder( new CryptoPP::StringSink(this->partialKey) )
     );
 }
 
-void AgreementMSG::generateNonce(void)
+void PartialKeyMSG::generateNonce(void)
 {
-    this->nonce = Encryption::generateNonce();
+    this->partialKey = Encryption::generateNonce();
 }
 
-void AgreementMSG::encryptNonce(CryptoPP::RSA::PublicKey publicKey)
+void PartialKeyMSG::encryptPartialKey(CryptoPP::RSA::PublicKey publicKey)
 {
-    std::string nonceCipher;
-    Encryption::asymEncrypt(nonce, nonceCipher, publicKey);
+    std::string partialKeyCipher;
+    Encryption::asymEncrypt(partialKey, partialKeyCipher, publicKey);
     
-    nonce = nonceCipher;
-    encrypted = true;
+    this->partialKey = partialKeyCipher;
+    this->encrypted = true;
 }
 
-void AgreementMSG::decryptNonce(CryptoPP::RSA::PrivateKey privateKey)
+void PartialKeyMSG::decryptPartialKey(CryptoPP::RSA::PrivateKey privateKey)
 {
-    std::string nonceRecovered;
-    Encryption::asymDecrypt(nonce, nonceRecovered, privateKey);
+    std::string partialKeyRecovered;
+    Encryption::asymDecrypt(partialKey, partialKeyRecovered, privateKey);
     
-    nonce = nonceRecovered;
-    encrypted = false;
+    this->partialKey = partialKeyRecovered;
+    this->encrypted = false;
 }
 
 
-/* AgreementMSG */
+/* PartialKeyMSG */
 
 
 ChatMSG::ChatMSG() : iv(CryptoPP::AES::BLOCKSIZE)
@@ -352,26 +320,6 @@ AppMSG::AppMSG()
 
 }
 
-
-
-AppMSG::AppMSG(BaseMSG *msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey)
-{
-    this->type = typeid(*msg).name() + 6;
-    this->source = source;
-    this->destination = destination;
-    this->msg = msg->serialize();
-    this->signature = createSignature(privateKey);
-}
-
-AppMSG::AppMSG(std::string msg, std::string source, std::string destination, CryptoPP::RSA::PrivateKey privateKey)
-{
-    this->type = "undefined";
-    this->source = source;
-    this->destination = destination;
-    this->msg = msg;
-    this->signature = createSignature(privateKey);
-}
-
 AppMSG::AppMSG(BaseMSG *msg, std::string source, std::string destination)
 {
     this->type = typeid(*msg).name() + 6;
@@ -437,7 +385,7 @@ bool AppMSG::verify(CryptoPP::RSA::PublicKey publicKey)
     return result;
 }
 
-std::string AppMSG::createSignature(CryptoPP::RSA::PrivateKey privateKey)
+void AppMSG::sign(CryptoPP::RSA::PrivateKey privateKey)
 {
     using namespace CryptoPP;
 
@@ -453,5 +401,5 @@ std::string AppMSG::createSignature(CryptoPP::RSA::PrivateKey privateKey)
         new HexEncoder( new StringSink(signatureHex) )
     );
     
-    return signatureHex;
+    this->signature = signatureHex;
 }
