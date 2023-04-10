@@ -64,7 +64,8 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
 
     // 1 Send client certificate
     CertMSG clientMsg(cert);
-    AppMSG clientAuth(&clientMsg, cert.subjectName, "Server", privateKey);
+    AppMSG clientAuth(&clientMsg, cert.subjectName, "Server");
+    clientAuth.sign(privateKey);
 
     nBytes = clientAuth.sendMSG(serverSocket);
     if (nBytes <= 0) {
@@ -74,7 +75,9 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     std::cerr << "Client certificate sent" << std::endl;
 
     // 2. Receive server certificate
-    CertMSG serverMsg;
+    std::string serverCertString, serverChallengeString;
+    ChallengeMSG serverChallengeMsg;
+    CertMSG serverCertMsg;
     AppMSG serverAuth;
     nBytes = serverAuth.readMSG(serverSocket);
     if (nBytes <= 0) {
@@ -83,10 +86,16 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     }
 
     // 2(a) Deserialise message
-    serverMsg.deserialize(serverAuth.msg);
-    serverMsg.decryptNonce(privateKey);
-    Ns = serverMsg.nonce;
-    serverCert = serverMsg.cert;
+    std::stringstream ss(serverAuth.msg);
+    std::getline(ss, serverCertString, ';');
+    std::getline(ss, serverChallengeString, ';');
+
+    serverCertMsg.deserialize(serverCertString);
+    serverCert = serverCertMsg.cert;
+
+    serverChallengeMsg.deserialize(serverChallengeString);
+    serverChallengeMsg.decryptNonces(privateKey);
+    Ns = serverChallengeMsg.challenge;
 
     // 2(b) Verify digital signature
     isVerified = serverAuth.verify(serverCert.publicKey);
@@ -96,7 +105,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     }
 
     // 2(c) Verify server certificate
-    isVerified = serverMsg.cert.verify(CACert.publicKey);
+    isVerified = serverCertMsg.cert.verify(CACert.publicKey);
     if (isVerified == false) {
         std::cerr << "Certificate did not match CA" << std::endl;
         return 1;
@@ -107,7 +116,8 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
     clientCR.generateChallenge();
     Nc = clientCR.challenge;
     clientCR.encryptNonces(serverCert.publicKey);
-    AppMSG clientCRAuth(&clientCR, cert.subjectName, serverCert.subjectName, privateKey);
+    AppMSG clientCRAuth(&clientCR, cert.subjectName, serverCert.subjectName);
+    clientCRAuth.sign(privateKey);
 
     nBytes = clientCRAuth.sendMSG(serverSocket);
     if (nBytes <= 0) {
@@ -169,7 +179,7 @@ int Client::readServer(Certificate CACert)
     } 
     else {
         // Client source
-        if(messageAuth.type == "AgreementMSG" && state != chatting) {
+        if(messageAuth.type == "PartialKeyMSG" && state != chatting) {
 
             std::string input;
 
@@ -226,18 +236,19 @@ int Client::sendPartialKey(void)
     int nBytes;
 
     // Create partial key
-    AgreementMSG baseMsg;
+    PartialKeyMSG baseMsg;
     baseMsg.generateNonce();
-    this->partialKey = baseMsg.nonce;
+    this->partialKey = baseMsg.partialKey;
 
     // Send key to each client
     for(ClientSession client : clients) {
         // Encrypt nonce for the destination client
-        AgreementMSG clientMsg = baseMsg;
-        clientMsg.encryptNonce(client.cert.publicKey);
+        PartialKeyMSG clientMsg = baseMsg;
+        clientMsg.encryptPartialKey(client.cert.publicKey);
 
         // Create authenticated integrity message
-        AppMSG clientAuth(&clientMsg, cert.subjectName, client.cert.subjectName, privateKey);
+        AppMSG clientAuth(&clientMsg, cert.subjectName, client.cert.subjectName);
+        clientAuth.sign(privateKey);
 
         nBytes = clientAuth.sendMSG(serverSocket);
         if (nBytes <= 0) {
@@ -271,10 +282,10 @@ int Client::readPartialKey(AppMSG messageAuth, std::string &partialKey)
     }
 
     // Read in message and decrypt nonce
-    AgreementMSG clientMsg;
+    PartialKeyMSG clientMsg;
     clientMsg.deserialize(messageAuth.msg);
-    clientMsg.decryptNonce(privateKey);
-    partialKey = clientMsg.nonce;
+    clientMsg.decryptPartialKey(privateKey);
+    partialKey = clientMsg.partialKey;
 
     return 0;
 }
