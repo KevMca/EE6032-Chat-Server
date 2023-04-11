@@ -1,7 +1,4 @@
 // Creates a new self-signed CA certificate and private key file pair
-//
-// Sources:
-//
 
 // Cryptography includes
 #include <cryptopp/cryptlib.h>

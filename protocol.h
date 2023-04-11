@@ -94,7 +94,7 @@ class CertMSG: public BaseMSG
 
 // Represents a socket message with a challenge nonce and a response nonce. The nonces can be
 // encrypted if the recipient's cert is known
-// Notation: {Nc, Nr}
+// Notation: {Nc, Nr}_K_A^-1
 // Sending Example:
 //      ChallengeMSG challengeMsg(response);
 // Receiving Example:
@@ -134,7 +134,7 @@ class ChallengeMSG: public BaseMSG
 };
 
 // Represents a socket message with a nonce used for key agreement
-// Notation: {N}k_r
+// Notation: {K_a}K_B
 class PartialKeyMSG: public BaseMSG
 {
     public:
@@ -153,7 +153,7 @@ class PartialKeyMSG: public BaseMSG
         void deserialize(std::string str);
 
         // Generates a random challenge nonce
-        void generateNonce(void);
+        void generatePartialKey(void);
 
         // Encrypts the partial key so only the intended recipient can access it
         // Inputs -> publicKey: the public key of the recipient
@@ -166,7 +166,7 @@ class PartialKeyMSG: public BaseMSG
 
 // Represents a socket message with an encrypted chat message and the IV used to encrypt the
 // message
-// Notation: {Msg}k_abc, IV
+// Notation: {Msg}K_abc, IV
 class ChatMSG: public BaseMSG
 {
     public:
@@ -196,7 +196,7 @@ class ChatMSG: public BaseMSG
 
 // A generic message wrapper for sending messages within the chat server application. It gives the
 // option for authenticated integrity, type information and source and destination information
-// Notation: {type, source, destination, msg, {H(msg)}_k^-1}
+// Notation: {type, source, destination, msg, {H(msg)}_K_A^-1}
 // Sending Example:
 //      AppMSG clientCertMsgAuth(&clientCertMsg, privateKey);
 // Receiving Example:

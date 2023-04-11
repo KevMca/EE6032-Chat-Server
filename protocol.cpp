@@ -147,7 +147,7 @@ void ChallengeMSG::deserialize(std::string str)
 
 std::string ChallengeMSG::generateChallenge(void)
 {
-    this->challenge = Encryption::generateNonce();
+    this->challenge = Encryption::generatePartialKey();
     return this->challenge;
 }
 
@@ -210,9 +210,9 @@ void PartialKeyMSG::deserialize(std::string str)
     );
 }
 
-void PartialKeyMSG::generateNonce(void)
+void PartialKeyMSG::generatePartialKey(void)
 {
-    this->partialKey = Encryption::generateNonce();
+    this->partialKey = Encryption::generatePartialKey();
 }
 
 void PartialKeyMSG::encryptPartialKey(CryptoPP::RSA::PublicKey publicKey)

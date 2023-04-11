@@ -38,7 +38,12 @@ class ClientSession {
         ClientSession(Certificate cert);
 };
 
-enum ClientState { startup, ready, agreeing, chatting };
+// List of possible states the client can be in
+//  Startup: Not connected to the server yet
+//  Ready: Connected to the server and verified it
+//  Agreement: Exchanging partial keys with other clients
+//  Chatting: A shared secret is established and chat messages can be sent
+enum ClientState { startup, ready, agreement, chatting };
 
 // Client class specification
 // Example:
@@ -56,8 +61,9 @@ class Client {
         Certificate cert;
         Certificate serverCert;
         std::vector<ClientSession> clients;
-        std::string partialKey;
+        std::string sharedKey;
 
+        // Empty constructor for client
         explicit Client(void);
 
         // Constructor for client if private and public keys are known
@@ -76,30 +82,59 @@ class Client {
         // Returns -> 0 if no errors, 1 if there was an error
         int connectServer(char *serverIP, u_short port, Certificate CACert);
 
-        int readServer(Certificate CACert);
+        // Reads the socket buffer and parses the message from the server
+        // Inputs -> CACert: the certificate of the certificate authority
+        // Returns -> 0 if no errors, 1 if there was an error
+        int parseServerMessage(Certificate CACert);
+
+        // Reads a certificate from the server and checks that it is valid
+        // Inputs -> messageAuth: The message that contains the certificate
+        //           CACert: The certificate of the issuing certificate authority
+        // Outputs -> newCert: The verified certificate
+        // Returns -> 0 if no errors, 1 if any of the verification checks fail
+        int readCertificate(AppMSG messageAuth, Certificate CACert, Certificate &newCert);
+
+        // Generates a partial key and sends it to the other clients
+        // Returns -> 0 if no errors, 1 if there was an error
+        int sendPartialKey(void);
+
+        // Parses a partial key message from another client
+        // Inputs -> messageAuth: The message that contains the partial key
+        // Outputs -> partialKey: The partial key contained inside the message
+        // Returns -> 0 if no errors, 1 if any of the message checks fail
+        int readPartialKey(AppMSG messageAuth, std::string &partialKey);
+
+        // Sends an encrypted chat message to all other clients
+        // Inputs -> message: The chat message to be sent
+        // Returns -> 0 if no errors, 1 if there was an error sending the message
+        int sendChatMessage(std::string message);
+
+        // Reads an encrypted chat message from another client and prints it
+        // Inputs -> messageAuth: The message that contains the encrypted chat message
+        // Outputs -> message: The decrypted message
+        // Returns -> 0 if no errors, 1 if there was an error
+        int readChatMessage(AppMSG messageAuth, std::string &message);
 
         // Prints the current table of other clients
         void printClients(void);
 
+        // Returns a client session, given a subject name
+        // Inputs -> subjectName: The name of the requested client
+        // Outputs -> session: The returned ClientSession
+        // Returns -> 0 if no errors, 1 if the client is not in the current list of clients
         int getClientSession(std::string subjectName, ClientSession **session);
-
-        int sendPartialKey(void);
-
-        int sendMessage(std::string message);
-
-        int readMessage(AppMSG messageAuth, std::string &message);
 
     private:
         WSADATA wsaData;
         int addrlen = sizeof(serverAddress);
 
-
-        int readPartialKey(AppMSG messageAuth, std::string &partialKey);
-
-        int readCertificate(AppMSG messageAuth, Certificate CACert, Certificate &newCert);
-
+        // Bitwise OR's the current shared key with the incoming client partial key
+        // Inputs -> clientPartialKey: the incoming partial key
+        // Returns -> 0 if no errors, 1 if the partial keys have different sizes
         int incorporatePartialKey(std::string clientPartialKey);
 
+        // Checks if all of the clients in the client list have sent their partial keys
+        // Returns -> true if agreement is complete, false if agreement is not complete
         bool isAgreementComplete(void);
 
         // Adds a client certificate to the list of other clients, if it doesn't already exist

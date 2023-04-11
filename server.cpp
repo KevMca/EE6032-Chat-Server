@@ -120,8 +120,6 @@ int Server::readClientConnections(Certificate CACert)
     client.state = sendingCert;
     clients.push_back(client);
 
-    Logger(client.cert.subjectName, logName);
-
     printClients();
 
 	return 0;
@@ -142,16 +140,20 @@ int Server::readClients(void)
                     Logger("Received message from disconnected client", logName);
                     break;
                 case sendingCert:
-                    verifyClientCert(buffer, client);
+                    err = verifyClientCert(buffer, client);
+                    if (err != 0) { return 1; }
                     sendServerCert(client);
+                    Logger("Received cert from " + client.cert.subjectName, logName);
                     break;
                 case sendingChallenge:
-                    verifyClientResponse(buffer, client);
+                    err = verifyClientResponse(buffer, client);
+                    if (err != 0) { return 1; }
                     sendClientUpdate();
                     Logger("Client verified", logName);
                     break;
                 case connected:
-                    echoMessage(buffer);
+                    err = echoMessage(buffer);
+                    if (err != 0) { return 1; }
                     break;
             }
 
@@ -248,12 +250,20 @@ int Server::sendServerCert(ClientSession &client)
 int Server::verifyClientResponse(std::string msg, ClientSession &client)
 {
     int nBytes;
+    bool isVerified;
     std::string clientChallenge, clientResponse;
 
     // 3(a) Read new challenge-response
     ChallengeMSG clientCR;
     AppMSG clientCRAuth;
     clientCRAuth.deserialize(msg);
+
+    // 3(b) Verify digital signature
+    isVerified = clientCRAuth.verify(client.cert.publicKey);
+    if (isVerified == false) {
+        std::cerr << "Message digital signature did not match" << std::endl;
+        return 1;
+    }
 
     // Extract response
     clientCR.deserialize(clientCRAuth.msg);
@@ -324,21 +334,35 @@ int Server::sendClientSessions(ClientSession &recipient)
 int Server::echoMessage(std::string msg)
 {
     int nBytes, err;
+    bool isVerified;
 
-    AppMSG clientAuth;
-    clientAuth.deserialize(msg);
+    ClientSession sender, recipient;
 
-    Logger("Received " + clientAuth.type + ", source: " + clientAuth.source + ", destination: " + clientAuth.destination, logName);
+    // Deserialize the message from the client
+    AppMSG clientMsg;
+    clientMsg.deserialize(msg);
 
-    ClientSession client;
+    // Perform an authenticated integrity check
+    if (clientMsg.type != "ChatMSG")
+    {
+        getClientSession(clientMsg.source, sender);
+        isVerified = clientMsg.verify(sender.cert.publicKey);
+        if (isVerified == false) {
+            std::cerr << "Message digital signature did not match" << std::endl;
+            return 1;
+        }
+    }
+
+    Logger("Received " + clientMsg.type + ", source: " + clientMsg.source + ", destination: " + clientMsg.destination, logName);
+
     // If the destination is not specified, broadcast the message to everyone except the source
-    if (clientAuth.destination.empty())
+    if (clientMsg.destination.empty())
     {
         for(ClientSession &client : clients) 
         {
-            if (client.cert.subjectName != clientAuth.source)
+            if (client.cert.subjectName != clientMsg.source)
             {
-                nBytes = clientAuth.sendMSG(client.socket);
+                nBytes = clientMsg.sendMSG(client.socket);
                 if (nBytes == 0) { 
                     std::cerr << "Client message could not be echoed" << std::endl;
                     return 1;
@@ -349,14 +373,14 @@ int Server::echoMessage(std::string msg)
     // If the destination is specified, send to that specific client only
     else 
     {
-        err = getClientSession(clientAuth.destination, client);
+        err = getClientSession(clientMsg.destination, recipient);
         if(err != 0)
         {
             std::cerr << "The destination for message is unknown to the server" << std::endl;
             return 1;
         }
 
-        nBytes = clientAuth.sendMSG(client.socket);
+        nBytes = clientMsg.sendMSG(recipient.socket);
         if (nBytes == 0) { 
             std::cerr << "Client message could not be echoed" << std::endl;
             return 1;
@@ -407,7 +431,8 @@ int main(int argc, char* argv[])
     while(true)
     {
         server.readClientConnections(CACert);	//Handle any connection requests
-        server.readClients();		            //Recive data from clients
+        err = server.readClients();		        //Receive data from clients
+        if (err != 0) { return 1; }
     }
 
     system("pause");

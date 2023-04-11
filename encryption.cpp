@@ -5,7 +5,7 @@
 #include <cryptopp/filters.h>
 #include "encryption.h"
 
-std::string Encryption::generateNonce(size_t size)
+std::string Encryption::generatePartialKey(size_t size)
 {
     using namespace CryptoPP;
 
