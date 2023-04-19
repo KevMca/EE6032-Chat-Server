@@ -229,13 +229,13 @@ int Server::sendServerCert(ClientSession &client)
     int nBytes;
 
     // 2 Send server certificate and a challenge
-    CertMSG serverMsg(cert);
+    CertMSG serverMsg(this->cert);
     ChallengeMSG serverChallenge;
     client.Ns = serverChallenge.generateChallenge();
     serverChallenge.encryptNonces(client.cert.publicKey);
 
     // Cert, N, {H(Cert, N)}_ks^-1
-    AppMSG serverAuth(serverMsg.serialize() + ";" + serverChallenge.serialize(), cert.subjectName, client.cert.subjectName);
+    AppMSG serverAuth(serverMsg.serialize() + ";" + serverChallenge.serialize(), this->cert.subjectName, client.cert.subjectName);
     serverAuth.sign(privateKey);
 
     nBytes = serverAuth.sendMSG(client.socket);
@@ -283,7 +283,7 @@ int Server::verifyClientResponse(std::string msg, ClientSession &client)
     // 4 Send challenge back
     ChallengeMSG serverCR(clientChallenge);
     serverCR.encryptNonces(client.cert.publicKey);
-    AppMSG serverCRAuth(&serverCR, cert.subjectName, client.cert.subjectName);
+    AppMSG serverCRAuth(&serverCR, this->cert.subjectName, client.cert.subjectName);
     serverCRAuth.sign(privateKey);
 
     nBytes = serverCRAuth.sendMSG(client.socket);

@@ -24,8 +24,7 @@
 #include "cert.h"
 #include "protocol.h"
 
-char *clientStateStrings[] = 
-{
+char *clientStateStrings[] = {
     "unverified",
     "disconnected",
     "sendingCert",
@@ -33,8 +32,15 @@ char *clientStateStrings[] =
     "connected"
 };
 
-enum clientState
-{
+// List of possible states for the connection between the server and client
+//  unverified: This state indicates that an authenticated integrity check, certificate verification
+//              or challenge-response process failed
+//  disconnected: The client has not started the connection process yet
+//  sendingCert: A connection request has been accepted and the client should be sending its 
+//               certificate next
+//  sendingChallenge: The client should be sending a challenge and response
+//  connected: The client has been authenticated and is connected
+enum clientState {
     unverified = -2,
     disconnected = -1,
     sendingCert = 0,
