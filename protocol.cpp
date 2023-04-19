@@ -242,6 +242,12 @@ ChatMSG::ChatMSG() : iv(CryptoPP::AES::BLOCKSIZE)
 
 }
 
+ChatMSG::ChatMSG(std::string source, std::string message) : iv(CryptoPP::AES::BLOCKSIZE)
+{
+    this->source = source;
+    this->message = message;
+}
+
 std::string ChatMSG::serialize(void)
 {
     using namespace CryptoPP;
@@ -249,12 +255,17 @@ std::string ChatMSG::serialize(void)
     std::stringstream out;
     std::string str, messageHex, ivHex, ivString;
 
-    StringSource ss1(this->message, true, 
+    if (encrypted == false) {
+        std::cerr << "Chat message has not been encrypted yet" << std::endl;
+        return std::string();
+    }
+
+    StringSource ss1(this->encryptedMessage, true, 
         new HexEncoder( new StringSink(messageHex) )
     );
 
     ivString = std::string((const char*)this->iv.data(), this->iv.size());
-    StringSource ss2(ivString, true, 
+    StringSource ss3(ivString, true, 
         new HexEncoder( new StringSink(ivHex) )
     );
     
@@ -278,7 +289,7 @@ void ChatMSG::deserialize(std::string str)
     deserializeString(in, ivHex);
 
     StringSource ss1(messageHex, true, 
-        new HexDecoder( new StringSink(this->message) )
+        new HexDecoder( new StringSink(this->encryptedMessage) )
     );
 
     StringSource ss2(ivHex, true, 
@@ -296,18 +307,22 @@ void ChatMSG::encryptMessage(std::string sharedKey)
     prng.GenerateBlock(this->iv, this->iv.size());
     
     std::string cipher;
-    Encryption::symEncrypt(message, cipher, sharedKey, this->iv);
+    Encryption::symEncrypt(this->source + ";" + this->message, cipher, sharedKey, this->iv);
     
-    message = cipher;
+    this->encryptedMessage = cipher;
     encrypted = true;
 }
 
 void ChatMSG::decryptMessage(std::string sharedKey)
 {
     std::string recovered;
-    Encryption::symDecrypt(message, recovered, sharedKey, iv);
+    Encryption::symDecrypt(this->encryptedMessage, recovered, sharedKey, iv);
     
-    message = recovered;
+    // Deserialise encrypted message
+    std::stringstream ss(recovered);
+    std::getline(ss, this->source, ';');
+    std::getline(ss, this->message, ';');
+
     encrypted = false;
 }
 

@@ -170,12 +170,17 @@ class PartialKeyMSG: public BaseMSG
 class ChatMSG: public BaseMSG
 {
     public:
-        std::string message;
+        std::string source;           // source
+        std::string message;          // msg
+        std::string encryptedMessage; // {source, msg}_k_abc
         CryptoPP::SecByteBlock iv;
         bool encrypted = NULL; // (Not encrypted: false, Encrypted: true, Unknown: NULL)
 
         // Empty ChatMSG constructor
         explicit ChatMSG();
+
+        // Constructs a ChatMSG with a source and message
+        explicit ChatMSG(std::string source, std::string message);
 
         // Converts the chat message to a hex string
         // Returns -> the serialized contents of the message
