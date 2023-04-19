@@ -75,7 +75,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
 
     // 1 Send client certificate
     CertMSG clientMsg(cert);
-    AppMSG clientAuth(&clientMsg, cert.subjectName, "Server");
+    AppMSG clientAuth(&clientMsg, cert.subjectName, serverCert.subjectName);
     clientAuth.sign(privateKey);
 
     nBytes = clientAuth.sendMSG(serverSocket);
@@ -164,7 +164,7 @@ int Client::connectServer(char *serverIP, u_short port, Certificate CACert)
         return 1;
     }
 
-    state = ready;
+    state = connected;
 
     return 0;
 }
@@ -205,7 +205,7 @@ int Client::parseServerMessage(Certificate CACert)
         // If the other client is sending a partial key
         if(messageAuth.type == "PartialKeyMSG" && state != chatting) {
             // If the agreement process has not started yet
-            if (state == ready)
+            if (state == connected)
             {
                 std::string input;
                 std::cout << messageAuth.source << " is inviting you to chat. Would you like to proceed? (y/n): " << std::endl;
@@ -344,12 +344,11 @@ int Client::sendChatMessage(std::string message)
     int nBytes;
 
     // Create chat message and encrypt it with the shared key
-    ChatMSG chat;
-    chat.message = message;
+    ChatMSG chat(cert.subjectName, message);
     chat.encryptMessage(this->sharedKey);
 
     // Create message without authenticated integrity check
-    AppMSG clientAuth(&chat, cert.subjectName, std::string());
+    AppMSG clientAuth(&chat, std::string(), std::string());
 
     nBytes = clientAuth.sendMSG(serverSocket);
     if (nBytes <= 0) {
@@ -368,7 +367,7 @@ int Client::readChatMessage(AppMSG messageAuth, std::string &message)
     clientMsg.decryptMessage(this->sharedKey);
     message = clientMsg.message;
 
-    std::cout << std::left << std::setw(10) << messageAuth.source << ": " << message << std::endl;
+    std::cout << std::left << std::setw(10) << clientMsg.source << ": " << message << std::endl;
 
     return 0;
 }
@@ -383,8 +382,8 @@ void Client::printClients(void)
         std::cout << client.cert.subjectName << std::endl;
     }
 
-    if (this->state == ready){
-        std::cout << "Press 'y' to start a chat:" << std::endl;
+    if (this->state == connected){
+        std::cout << std::endl << "Press 'y' to start a chat:" << std::endl;
     }
 }
 
@@ -530,7 +529,7 @@ int main(int argc, char* argv[])
             std::string input;
             std::getline(std::cin, input);
 
-            if (client.state == ready)
+            if (client.state == connected)
             {
                 // If the user wants to connect
                 if(input == "y") {

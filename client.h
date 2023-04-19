@@ -40,10 +40,10 @@ class ClientSession {
 
 // List of possible states the client can be in
 //  Startup: Not connected to the server yet
-//  Ready: Connected to the server and verified it
+//  Connected: Connected to the server and verified it
 //  Agreement: Exchanging partial keys with other clients
 //  Chatting: A shared secret is established and chat messages can be sent
-enum ClientState { startup, ready, agreement, chatting };
+enum ClientState { startup, connected, agreement, chatting };
 
 // Client class specification
 // Example:
