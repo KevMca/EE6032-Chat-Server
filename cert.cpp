@@ -1,3 +1,4 @@
+// Copyright 2023 Kevin McAndrew
 // Source file for creating certificates and manipulating their keys
 //
 // Sources:
@@ -12,41 +13,33 @@
 #include <cryptopp/osrng.h>
 
 // Local includes
-#include "cert.h"
-#include "encryption.h"
+#include "./cert.h"
+#include "./encryption.h"
 
 /* Constructors */
 
 
-Certificate::Certificate()
-{
-    
-}
+Certificate::Certificate() {}
 
-Certificate::Certificate(std::string subjectName)
-{
+Certificate::Certificate(std::string subjectName) {
     this->subjectName = subjectName;
 }
 
-Certificate::Certificate(const char *fileName)
-{
+Certificate::Certificate(const char *fileName) {
     using namespace CryptoPP;
 
-    try
-    {
+    try {
         std::string publicKeyString;
         std::ifstream in(fileName);
 
-        this->readString(in, this->subjectName);
-        this->readString(in, publicKeyString);
-        this->readString(in, this->signature);
+        this->subjectName = this->readString(in);
+        publicKeyString   = this->readString(in);
+        this->signature   = this->readString(in);
 
         this->publicKey = stringToKey<RSA::PublicKey>(publicKeyString);
 
         in.close();
-    }
-    catch(const std::exception& e)
-    {
+    } catch(const std::exception& e) {
         std::cerr << e.what() << '\n';
     }
 }
@@ -55,29 +48,24 @@ Certificate::Certificate(const char *fileName)
 /* Instance functions */
 
 
-void Certificate::save(const char *fileName)
-{
+void Certificate::save(const char *fileName) {
     using namespace CryptoPP;
 
-    try
-    {
+    try {
         std::ofstream out(fileName, std::ios::trunc);
-        std::string publicKeyString = this->keyToString<RSA::PublicKey>(this->publicKey);
+        std::string publicKeyString = keyToString<RSA::PublicKey>(this->publicKey);
 
         this->writeString(out, subjectName);
         this->writeString(out, publicKeyString);
         this->writeString(out, signature);
 
         out.close();
-    }
-    catch(const std::exception& e)
-    {
+    } catch(const std::exception& e) {
         std::cerr << e.what() << '\n';
     }
 }
 
-CryptoPP::RSA::PrivateKey Certificate::createKeys(unsigned int keySize)
-{
+CryptoPP::RSA::PrivateKey Certificate::createKeys(unsigned int keySize) {
     using namespace CryptoPP;
 
     AutoSeededRandomPool rng;
@@ -91,8 +79,7 @@ CryptoPP::RSA::PrivateKey Certificate::createKeys(unsigned int keySize)
     return privateKey;
 }
 
-void Certificate::sign(CryptoPP::RSA::PrivateKey privateCAKey)
-{
+void Certificate::sign(CryptoPP::RSA::PrivateKey privateCAKey) {
     using namespace CryptoPP;
 
     // Convert contents to string
@@ -107,12 +94,11 @@ void Certificate::sign(CryptoPP::RSA::PrivateKey privateCAKey)
 
     // Convert to hex
     StringSource ss(signature, true,
-        new HexEncoder( new StringSink(this->signature) )
+        new HexEncoder(new StringSink(this->signature))
     );
 }
 
-bool Certificate::verify(CryptoPP::RSA::PublicKey publicCAKey)
-{
+bool Certificate::verify(CryptoPP::RSA::PublicKey publicCAKey) {
     using namespace CryptoPP;
 
     // Convert contents to string and add back to the signature
@@ -126,17 +112,16 @@ bool Certificate::verify(CryptoPP::RSA::PublicKey publicCAKey)
 
     // Append signature to contents
     std::string sig = contents;
-    sig.insert( sig.end(), sigString.begin(), sigString.end() );
+    sig.insert(sig.end(), sigString.begin(), sigString.end());
 
     // Verify the signature and contents
     std::string recovered;
     bool result = Encryption::verify(sig, recovered, publicCAKey);
-    
+
     return result;
 }
 
-std::string Certificate::toString(void)
-{
+std::string Certificate::toString(void) {
     using namespace CryptoPP;
 
     // Convert subject name and public key to string
@@ -144,8 +129,7 @@ std::string Certificate::toString(void)
 
     // Append signature string
     std::string certString = contents;
-    certString.insert( certString.end(), signature.begin(), signature.end() );
-    
+    certString.insert(certString.end(), signature.begin(), signature.end());
     return certString;
 }
 
@@ -154,35 +138,27 @@ std::string Certificate::toString(void)
 
 
 template <typename T>
-void Certificate::saveKey(T key, const char *fileName)
-{
+void Certificate::saveKey(T key, const char *fileName) {
     using namespace CryptoPP;
 
-    try
-    {
+    try {
         FileSink output(fileName);
         key.DEREncode(output);
-    }
-    catch(const std::exception& e)
-    {
+    } catch(const std::exception& e) {
         std::cerr << e.what() << '\n';
     }
 }
 
 template <typename T>
-T Certificate::readKey(const char *fileName)
-{
+T Certificate::readKey(const char *fileName) {
     using namespace CryptoPP;
 
     T key;
 
-    try
-    {
+    try {
         FileSource input(fileName, true);
         key.BERDecode(input);
-    }
-    catch(const std::exception& e)
-    {
+    } catch(const std::exception& e) {
         std::cerr << e.what() << '\n';
     }
 
@@ -190,8 +166,7 @@ T Certificate::readKey(const char *fileName)
 }
 
 template <typename T>
-std::string Certificate::keyToString(T key)
-{
+std::string Certificate::keyToString(T key) {
     using namespace CryptoPP;
 
     std::string keyString;
@@ -205,15 +180,14 @@ std::string Certificate::keyToString(T key)
 }
 
 template <typename T>
-T Certificate::stringToKey(std::string keyString)
-{
+T Certificate::stringToKey(std::string keyString) {
     using namespace CryptoPP;
 
     std::string keyDecoded;
     T key;
 
     HexDecoder decoder(new StringSink(keyDecoded));
-    decoder.Put( (byte*)keyString.data(), keyString.size() );
+    decoder.Put((byte *)keyString.data(), keyString.size());
     decoder.MessageEnd();
 
     StringSource ss(keyDecoded, true);
@@ -223,8 +197,7 @@ T Certificate::stringToKey(std::string keyString)
 }
 
 template <typename T>
-void Certificate::printKey(T key)
-{
+void Certificate::printKey(T key) {
     std::string keyString = keyToString<T>(key);
     std::cout << keyString << std::endl;
 }
@@ -233,33 +206,34 @@ void Certificate::printKey(T key)
 /* Private */
 
 
-void Certificate::writeString(std::ostream &out, const std::string &data)
-{
+void Certificate::writeString(std::ostream &out, const std::string data) {
     unsigned int len = data.size();
     out.write( (char*)&len, sizeof(len) );
     out.write( (const char*)&data[0], len * sizeof(data[0]) );
 }
 
-void Certificate::readString(std::istream &in, std::string &data)
-{
+std::string Certificate::readString(std::istream &in) {
+    std::string data;
     unsigned int len = 0;
+
     in.read( (char*)&len, sizeof(len) );
     data.resize(len);
-    if( len > 0 )
-    {
+
+    if (len > 0) {
         in.read( (char*)&data[0], len * sizeof(data[0]) );
     }
+
+    return data;
 }
 
-std::string Certificate::contentsToString(void)
-{
+std::string Certificate::contentsToString(void) {
     using namespace CryptoPP;
 
     std::string publicKeyString = this->keyToString<RSA::PublicKey>(this->publicKey);
 
     // Concatenate subjectName and publicKeyString
     std::string out(subjectName.begin(), subjectName.end());
-    out.insert( out.end(), publicKeyString.begin(), publicKeyString.end() );
+    out.insert(out.end(), publicKeyString.begin(), publicKeyString.end());
 
     return out;
 }

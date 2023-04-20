@@ -1,14 +1,19 @@
+// Copyright 2023 Kevin McAndrew
+// Protocol source file with message classes for standardising how messages are sent between
+// clients and the chat server
+//
+// Sources:
+//
 
-#include "protocol.h"
+#include "./protocol.h"
 
 
 /* BaseMSG */
 
-int BaseMSG::readMSG(SOCKET socket)
-{
+int BaseMSG::readMSG(SOCKET socket) {
     char buffer[DEFAULT_BUFLEN] = { 0 };
     int nBytes = recv(socket, buffer, DEFAULT_BUFLEN, 0);
-    
+
     if (nBytes > 0) {
         deserialize(buffer);
     }
@@ -16,8 +21,7 @@ int BaseMSG::readMSG(SOCKET socket)
     return nBytes;
 }
 
-int BaseMSG::sendMSG(SOCKET socket)
-{
+int BaseMSG::sendMSG(SOCKET socket) {
     std::string serial = serialize();
     const char *msg = serial.c_str();
     int nBytes = send(socket, msg, (int)strlen(msg), 0);
@@ -25,16 +29,15 @@ int BaseMSG::sendMSG(SOCKET socket)
     return nBytes;
 }
 
-void BaseMSG::serializeString(std::ostream &out, std::string data)
-{
+void BaseMSG::serializeString(std::ostream &out, std::string data) {
     out << data.size();
     out << ',';
     out << data;
     out << ',';
 }
 
-void BaseMSG::deserializeString(std::istream &in, std::string &data)
-{
+std::string BaseMSG::deserializeString(std::istream &in) {
+    std::string data;
     int len = 0;
     char comma;
     in >> len;
@@ -45,27 +48,24 @@ void BaseMSG::deserializeString(std::istream &in, std::string &data)
         data.assign(tmp.data(), len);
     }
     in >> comma;
+
+    return data;
 }
 
 
 /* CertMSG */
 
 
-CertMSG::CertMSG()
-{
+CertMSG::CertMSG() {}
 
-}
-
-CertMSG::CertMSG(Certificate cert)
-{
+CertMSG::CertMSG(Certificate cert) {
     this->cert = cert;
 }
 
-std::string CertMSG::serialize(void)
-{
+std::string CertMSG::serialize(void) {
     std::stringstream out;
     std::string str;
-    
+
     // Serialize certificate
     serializeString(out, cert.subjectName);
     serializeString(out, cert.keyToString(cert.publicKey));
@@ -76,17 +76,16 @@ std::string CertMSG::serialize(void)
     return str;
 }
 
-void CertMSG::deserialize(std::string str)
-{
+void CertMSG::deserialize(std::string str) {
     std::stringstream in;
     in.str(str);
 
     Certificate cert;
     std::string subjectName, publicKeyString, signature;
-    
-    deserializeString(in, subjectName);
-    deserializeString(in, publicKeyString);
-    deserializeString(in, signature);
+
+    subjectName     = deserializeString(in);
+    publicKeyString = deserializeString(in);
+    signature       = deserializeString(in);
 
     cert.subjectName = subjectName;
     cert.publicKey = cert.stringToKey<CryptoPP::RSA::PublicKey>(publicKeyString);
@@ -98,28 +97,25 @@ void CertMSG::deserialize(std::string str)
 /* ChallengeMSG */
 
 
-ChallengeMSG::ChallengeMSG()
-{
+ChallengeMSG::ChallengeMSG() {}
 
-}
-
-ChallengeMSG::ChallengeMSG(std::string response)
-{
+ChallengeMSG::ChallengeMSG(std::string response) {
     this->response = response;
 }
 
-std::string ChallengeMSG::serialize(void)
-{
+std::string ChallengeMSG::serialize(void) {
+    using namespace CryptoPP;
+
     std::stringstream out;
     std::string str, challengeString, responseString;
 
-    CryptoPP::StringSource ss1(challenge, true, 
-        new CryptoPP::HexEncoder( new CryptoPP::StringSink(challengeString) )
+    StringSource ss1(challenge, true,
+        new HexEncoder( new StringSink(challengeString) )
     );
-    CryptoPP::StringSource ss2(response, true, 
-        new CryptoPP::HexEncoder( new CryptoPP::StringSink(responseString) )
+    StringSource ss2(response, true,
+        new HexEncoder( new StringSink(responseString) )
     );
-    
+
     serializeString(out, challengeString);
     serializeString(out, responseString);
 
@@ -128,46 +124,44 @@ std::string ChallengeMSG::serialize(void)
     return str;
 }
 
-void ChallengeMSG::deserialize(std::string str)
-{
+void ChallengeMSG::deserialize(std::string str) {
+    using namespace CryptoPP;
+
     std::stringstream in;
     std::string challengeHex, responseHex;
     in.str(str);
 
-    deserializeString(in, challengeHex);
-    deserializeString(in, responseHex);
+    challengeHex = deserializeString(in);
+    responseHex  = deserializeString(in);
 
-    CryptoPP::StringSource ss1(challengeHex, true, 
-        new CryptoPP::HexDecoder( new CryptoPP::StringSink(this->challenge) )
+    StringSource ss1(challengeHex, true,
+        new HexDecoder( new StringSink(this->challenge) )
     );
-    CryptoPP::StringSource ss2(responseHex, true, 
-        new CryptoPP::HexDecoder( new CryptoPP::StringSink(this->response) )
+    StringSource ss2(responseHex, true,
+        new HexDecoder( new StringSink(this->response) )
     );
 }
 
-std::string ChallengeMSG::generateChallenge(void)
-{
+std::string ChallengeMSG::generateChallenge(void) {
     this->challenge = Encryption::generatePartialKey();
     return this->challenge;
 }
 
-void ChallengeMSG::encryptNonces(CryptoPP::RSA::PublicKey publicKey)
-{
+void ChallengeMSG::encryptNonces(CryptoPP::RSA::PublicKey publicKey) {
     std::string challengeCipher, responseCipher;
     Encryption::asymEncrypt(challenge, challengeCipher, publicKey);
     Encryption::asymEncrypt(response, responseCipher, publicKey);
-    
+
     challenge = challengeCipher;
     response = responseCipher;
     encrypted = true;
 }
 
-void ChallengeMSG::decryptNonces(CryptoPP::RSA::PrivateKey privateKey)
-{
+void ChallengeMSG::decryptNonces(CryptoPP::RSA::PrivateKey privateKey) {
     std::string challengeRecovered, responseRecovered;
     Encryption::asymDecrypt(challenge, challengeRecovered, privateKey);
     Encryption::asymDecrypt(response, responseRecovered, privateKey);
-    
+
     challenge = challengeRecovered;
     response  = responseRecovered;
     encrypted = false;
@@ -176,20 +170,18 @@ void ChallengeMSG::decryptNonces(CryptoPP::RSA::PrivateKey privateKey)
 /* PartialKeyMSG */
 
 
-PartialKeyMSG::PartialKeyMSG()
-{
+PartialKeyMSG::PartialKeyMSG() {}
 
-}
+std::string PartialKeyMSG::serialize(void) {
+    using namespace CryptoPP;
 
-std::string PartialKeyMSG::serialize(void)
-{
     std::stringstream out;
     std::string str, partialKeyString;
 
-    CryptoPP::StringSource ss1(this->partialKey, true, 
-        new CryptoPP::HexEncoder( new CryptoPP::StringSink(partialKeyString) )
+    StringSource ss1(this->partialKey, true,
+        new HexEncoder( new StringSink(partialKeyString) )
     );
-    
+
     serializeString(out, partialKeyString);
 
     str = out.str();
@@ -197,38 +189,36 @@ std::string PartialKeyMSG::serialize(void)
     return str;
 }
 
-void PartialKeyMSG::deserialize(std::string str)
-{
+void PartialKeyMSG::deserialize(std::string str) {
+    using namespace CryptoPP;
+
     std::stringstream in;
     std::string partialKeyHex;
     in.str(str);
 
-    deserializeString(in, partialKeyHex);
+    partialKeyHex = deserializeString(in);
 
-    CryptoPP::StringSource ss1(partialKeyHex, true, 
-        new CryptoPP::HexDecoder( new CryptoPP::StringSink(this->partialKey) )
+    StringSource ss1(partialKeyHex, true,
+        new HexDecoder( new StringSink(this->partialKey) )
     );
 }
 
-void PartialKeyMSG::generatePartialKey(void)
-{
+void PartialKeyMSG::generatePartialKey(void) {
     this->partialKey = Encryption::generatePartialKey();
 }
 
-void PartialKeyMSG::encryptPartialKey(CryptoPP::RSA::PublicKey publicKey)
-{
+void PartialKeyMSG::encryptPartialKey(CryptoPP::RSA::PublicKey publicKey) {
     std::string partialKeyCipher;
     Encryption::asymEncrypt(partialKey, partialKeyCipher, publicKey);
-    
+
     this->partialKey = partialKeyCipher;
     this->encrypted = true;
 }
 
-void PartialKeyMSG::decryptPartialKey(CryptoPP::RSA::PrivateKey privateKey)
-{
+void PartialKeyMSG::decryptPartialKey(CryptoPP::RSA::PrivateKey privateKey) {
     std::string partialKeyRecovered;
     Encryption::asymDecrypt(partialKey, partialKeyRecovered, privateKey);
-    
+
     this->partialKey = partialKeyRecovered;
     this->encrypted = false;
 }
@@ -237,19 +227,14 @@ void PartialKeyMSG::decryptPartialKey(CryptoPP::RSA::PrivateKey privateKey)
 /* PartialKeyMSG */
 
 
-ChatMSG::ChatMSG() : iv(CryptoPP::AES::BLOCKSIZE)
-{
+ChatMSG::ChatMSG() : iv(CryptoPP::AES::BLOCKSIZE) {}
 
-}
-
-ChatMSG::ChatMSG(std::string source, std::string message) : iv(CryptoPP::AES::BLOCKSIZE)
-{
+ChatMSG::ChatMSG(std::string source, std::string message) : iv(CryptoPP::AES::BLOCKSIZE) {
     this->source = source;
     this->message = message;
 }
 
-std::string ChatMSG::serialize(void)
-{
+std::string ChatMSG::serialize(void) {
     using namespace CryptoPP;
 
     std::stringstream out;
@@ -260,15 +245,15 @@ std::string ChatMSG::serialize(void)
         return std::string();
     }
 
-    StringSource ss1(this->encryptedMessage, true, 
+    StringSource ss1(this->encryptedMessage, true,
         new HexEncoder( new StringSink(messageHex) )
     );
 
     ivString = std::string((const char*)this->iv.data(), this->iv.size());
-    StringSource ss3(ivString, true, 
+    StringSource ss3(ivString, true,
         new HexEncoder( new StringSink(ivHex) )
     );
-    
+
     serializeString(out, messageHex);
     serializeString(out, ivHex);
 
@@ -277,18 +262,17 @@ std::string ChatMSG::serialize(void)
     return str;
 }
 
-void ChatMSG::deserialize(std::string str)
-{
+void ChatMSG::deserialize(std::string str) {
     using namespace CryptoPP;
 
     std::stringstream in;
     std::string messageHex, ivHex, ivString;
     in.str(str);
 
-    deserializeString(in, messageHex);
-    deserializeString(in, ivHex);
+    messageHex = deserializeString(in);
+    ivHex      = deserializeString(in);
 
-    StringSource ss1(messageHex, true, 
+    StringSource ss1(messageHex, true,
         new HexDecoder( new StringSink(this->encryptedMessage) )
     );
 
@@ -298,26 +282,22 @@ void ChatMSG::deserialize(std::string str)
     this->iv = SecByteBlock((const byte*)ivString.data(), ivString.size());
 }
 
-void ChatMSG::encryptMessage(std::string sharedKey)
-{
-    using namespace CryptoPP;
-
+void ChatMSG::encryptMessage(std::string sharedKey) {
     // Generate random Initial Variation (IV)
-    AutoSeededRandomPool prng;
+    CryptoPP::AutoSeededRandomPool prng;
     prng.GenerateBlock(this->iv, this->iv.size());
-    
+
     std::string cipher;
     Encryption::symEncrypt(this->source + ";" + this->message, cipher, sharedKey, this->iv);
-    
+
     this->encryptedMessage = cipher;
     encrypted = true;
 }
 
-void ChatMSG::decryptMessage(std::string sharedKey)
-{
+void ChatMSG::decryptMessage(std::string sharedKey) {
     std::string recovered;
     Encryption::symDecrypt(this->encryptedMessage, recovered, sharedKey, iv);
-    
+
     // Deserialise encrypted message
     std::stringstream ss(recovered);
     std::getline(ss, this->source, ';');
@@ -330,32 +310,26 @@ void ChatMSG::decryptMessage(std::string sharedKey)
 /* AppMSG */
 
 
-AppMSG::AppMSG()
-{
+AppMSG::AppMSG() {}
 
-}
-
-AppMSG::AppMSG(BaseMSG *msg, std::string source, std::string destination)
-{
+AppMSG::AppMSG(BaseMSG *msg, std::string source, std::string destination) {
     this->type = typeid(*msg).name() + 6;
     this->source = source;
     this->destination = destination;
     this->msg = msg->serialize();
 }
 
-AppMSG::AppMSG(std::string msg, std::string source, std::string destination)
-{
+AppMSG::AppMSG(std::string msg, std::string source, std::string destination) {
     this->type = "undefined";
     this->source = source;
     this->destination = destination;
     this->msg = msg;
 }
 
-std::string AppMSG::serialize(void)
-{
+std::string AppMSG::serialize(void) {
     std::stringstream out;
     std::string str;
-    
+
     serializeString(out, type);
     serializeString(out, source);
     serializeString(out, destination);
@@ -367,20 +341,18 @@ std::string AppMSG::serialize(void)
     return str;
 }
 
-void AppMSG::deserialize(std::string str)
-{
+void AppMSG::deserialize(std::string str) {
     std::stringstream in;
     in.str(str);
 
-    deserializeString(in, type);
-    deserializeString(in, source);
-    deserializeString(in, destination);
-    deserializeString(in, msg);
-    deserializeString(in, signature);
+    this->type        = deserializeString(in);
+    this->source      = deserializeString(in);
+    this->destination = deserializeString(in);
+    this->msg         = deserializeString(in);
+    this->signature   = deserializeString(in);
 }
 
-bool AppMSG::verify(CryptoPP::RSA::PublicKey publicKey)
-{
+bool AppMSG::verify(CryptoPP::RSA::PublicKey publicKey) {
     using namespace CryptoPP;
 
     // Convert from hex
@@ -391,17 +363,16 @@ bool AppMSG::verify(CryptoPP::RSA::PublicKey publicKey)
 
     // Append signature to contents
     std::string signedMsg = msg;
-    signedMsg.insert( signedMsg.end(), signatureHex.begin(), signatureHex.end() );
+    signedMsg.insert(signedMsg.end(), signatureHex.begin(), signatureHex.end());
 
     // Verify the signature and contents
     std::string recovered;
     bool result = Encryption::verify(signedMsg, recovered, publicKey);
-    
+
     return result;
 }
 
-void AppMSG::sign(CryptoPP::RSA::PrivateKey privateKey)
-{
+void AppMSG::sign(CryptoPP::RSA::PrivateKey privateKey) {
     using namespace CryptoPP;
 
     // Sign the contents
@@ -415,6 +386,6 @@ void AppMSG::sign(CryptoPP::RSA::PrivateKey privateKey)
     StringSource ss(signature, true,
         new HexEncoder( new StringSink(signatureHex) )
     );
-    
+
     this->signature = signatureHex;
 }

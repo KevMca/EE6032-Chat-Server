@@ -1,12 +1,12 @@
-#include <cryptopp/cryptlib.h>
-#include <cryptopp/rsa.h>
-#include <cryptopp/osrng.h>
-#include <cryptopp/pssr.h>
-#include <cryptopp/filters.h>
-#include "encryption.h"
+// Copyright 2023 Kevin McAndrew
+// Source file for or encapsulating cryptopp encryption and vertification functions
+//
+// Sources:
+//
 
-std::string Encryption::generatePartialKey(size_t size)
-{
+#include "./encryption.h"
+
+std::string Encryption::generatePartialKey(size_t size) {
     using namespace CryptoPP;
 
     SecByteBlock nonce(size);
@@ -18,12 +18,10 @@ std::string Encryption::generatePartialKey(size_t size)
     return nonceString;
 }
 
-int Encryption::symEncrypt(std::string &plain, std::string &cipher, std::string sharedKey, CryptoPP::SecByteBlock iv)
-{
+int Encryption::symEncrypt(std::string plain, std::string &cipher, std::string sharedKey, CryptoPP::SecByteBlock iv) {
     using namespace CryptoPP;
 
-    try
-    {
+    try {
         // Setup encryption type to use AES in Cipher Block Chaining (CBC) mode
         CBC_Mode< AES >::Encryption e;
         e.SetKeyWithIV((const byte*)sharedKey.data(), sharedKey.size(), (const byte*)iv.data());
@@ -33,8 +31,7 @@ int Encryption::symEncrypt(std::string &plain, std::string &cipher, std::string 
             new StreamTransformationFilter(e, new StringSink(cipher))
         );
     }
-    catch(const Exception& err)
-    {
+    catch(const Exception& err) {
         std::cerr << err.what() << std::endl;
         return 1;
     }
@@ -42,12 +39,10 @@ int Encryption::symEncrypt(std::string &plain, std::string &cipher, std::string 
     return 0;
 }
 
-int Encryption::symDecrypt(std::string &cipher, std::string &recovered, std::string sharedKey, CryptoPP::SecByteBlock iv)
-{
+int Encryption::symDecrypt(std::string cipher, std::string &recovered, std::string sharedKey, CryptoPP::SecByteBlock iv) {
     using namespace CryptoPP;
 
-    try
-    {
+    try {
         // Setup decryption type to use AES in Cipher Block Chaining (CBC) mode
         CBC_Mode< AES >::Decryption d;
         d.SetKeyWithIV((const byte*)sharedKey.data(), sharedKey.size(), iv);
@@ -57,8 +52,7 @@ int Encryption::symDecrypt(std::string &cipher, std::string &recovered, std::str
             new StreamTransformationFilter(d, new StringSink(recovered))
         );
     }
-    catch(const Exception& e)
-    {
+    catch(const Exception& e) {
         std::cerr << e.what() << std::endl;
         return 1;
     }
@@ -66,8 +60,7 @@ int Encryption::symDecrypt(std::string &cipher, std::string &recovered, std::str
     return 0;
 }
 
-void Encryption::asymEncrypt(std::string &plain, std::string &cipher, CryptoPP::RSA::PublicKey publicKey)
-{
+void Encryption::asymEncrypt(std::string plain, std::string &cipher, CryptoPP::RSA::PublicKey publicKey) {
     using namespace CryptoPP;
 
     AutoSeededRandomPool rng;
@@ -79,8 +72,7 @@ void Encryption::asymEncrypt(std::string &plain, std::string &cipher, CryptoPP::
     );
 }
 
-void Encryption::asymDecrypt(std::string &cipher, std::string &recovered, CryptoPP::RSA::PrivateKey privateKey)
-{
+void Encryption::asymDecrypt(std::string cipher, std::string &recovered, CryptoPP::RSA::PrivateKey privateKey) {
     using namespace CryptoPP;
 
     AutoSeededRandomPool rng;
@@ -92,8 +84,7 @@ void Encryption::asymDecrypt(std::string &cipher, std::string &recovered, Crypto
     );
 }
 
-int Encryption::sign(std::string &plain, std::string &signature, CryptoPP::RSA::PrivateKey privateKey)
-{
+int Encryption::sign(std::string plain, std::string &signature, CryptoPP::RSA::PrivateKey privateKey) {
     using namespace CryptoPP;
 
     AutoSeededRandomPool rng;
@@ -104,7 +95,7 @@ int Encryption::sign(std::string &plain, std::string &signature, CryptoPP::RSA::
     // Create signature space
     size_t length = signer.MaxSignatureLength();
 
-    StringSource ss1(plain, true, 
+    StringSource ss1(plain, true,
         new SignerFilter(rng, signer,
             new StringSink(signature), true
         )
@@ -113,8 +104,7 @@ int Encryption::sign(std::string &plain, std::string &signature, CryptoPP::RSA::
     return 0;
 }
 
-bool Encryption::verify(std::string &signature, std::string &recovered, CryptoPP::RSA::PublicKey publicKey)
-{
+bool Encryption::verify(std::string signature, std::string &recovered, CryptoPP::RSA::PublicKey publicKey) {
     using namespace CryptoPP;
 
     // Verify if the digest of plaintext is the same as the decrypted signature
@@ -122,16 +112,14 @@ bool Encryption::verify(std::string &signature, std::string &recovered, CryptoPP
 
     bool result = true;
 
-    try
-    {
+    try {
         StringSource ss2(signature, true,
             new SignatureVerificationFilter(verifier,
                 new StringSink(recovered), HashVerificationFilter::PUT_MESSAGE | HashVerificationFilter::THROW_EXCEPTION
             )
         );
-    } 
-    catch (...)
-    {
+    }
+    catch (...) {
         result = false;
     }
 

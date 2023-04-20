@@ -1,3 +1,4 @@
+// Copyright 2023 Kevin McAndrew
 // Server source file for communicating with clients
 //
 // Sources:
@@ -6,8 +7,8 @@
 // https://www.cryptopp.com/wiki/RSA_Cryptography
 // https://www.daniweb.com/programming/software-development/threads/6811/winsock-multi-client-servers
 
-#include "server.h"
-#include "logging.h"
+#include "./server.h"
+#include "./logging.h"
 
 
 /* Parameters */
@@ -29,11 +30,10 @@ const char *publicCAName  = "certs/root_public.der";
 /* ClientSession */
 
 
-ClientSession::ClientSession(void) { }
+ClientSession::ClientSession(void) {}
 ClientSession::ClientSession(SOCKET socket) { this->socket = socket; }
 ClientSession::ClientSession(Certificate cert) { this->cert = cert; }
-ClientSession::ClientSession(SOCKET socket, Certificate cert)
-{
+ClientSession::ClientSession(SOCKET socket, Certificate cert) {
     this->socket = socket;
     this->cert   = cert;
 }
@@ -44,20 +44,18 @@ ClientSession::ClientSession(SOCKET socket, Certificate cert)
 
 Server::Server(void) { }
 
-Server::Server(const char *privateName, const char *publicName)
-{
+Server::Server(const char *privateName, const char *publicName) {
     Certificate cert(publicName);
     this->cert = cert;
     privateKey = Certificate::readKey<CryptoPP::RSA::PrivateKey>(privateName);
 }
 
-int Server::start(char *serverIP, u_short port)
-{
+int Server::start(char *serverIP, u_short port) {
     int err;
     char opt = 1;
 
     // Initialize Winsock
-    err = WSAStartup(MAKEWORD(2,2), &wsaData);
+    err = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (err != 0) {
         std::cerr << "WSAStartup failed with error: " << err << std::endl;
         return 1;
@@ -96,16 +94,15 @@ int Server::start(char *serverIP, u_short port)
     }
 
     // Set blocking type to non-blocking
-    unsigned long b=1;
-	ioctlsocket(serverSocket,FIONBIO,&b);
+    u_long b = 1;
+    ioctlsocket(serverSocket, FIONBIO, &b);
 
     Logger("Server started", logName);
 
     return 0;
 }
 
-int Server::readClientConnections(Certificate CACert)
-{
+int Server::readClientConnections(Certificate CACert) {
     int err;
     SOCKET clientSocket;
 
@@ -122,20 +119,18 @@ int Server::readClientConnections(Certificate CACert)
 
     printClients();
 
-	return 0;
+    return 0;
 }
 
-int Server::readClients(void)
-{
+int Server::readClients(void) {
     int err;
     char buffer[DEFAULT_BUFLEN] = { 0 };
 
-    for(ClientSession &client : clients) {
+    for (ClientSession &client : clients) {
         int nBytes = recv(client.socket, buffer, DEFAULT_BUFLEN, 0);
 
         if (nBytes > 0) {
-            switch(client.state)
-            {
+            switch (client.state) {
                 case disconnected:
                     Logger("Received message from disconnected client", logName);
                     break;
@@ -161,26 +156,24 @@ int Server::readClients(void)
         }
     }
 
-	return 0;
+    return 0;
 }
 
-void Server::printClients(void)
-{
+void Server::printClients(void) {
     system("cls");
     std::cout << this->cert.subjectName << "\n----------" << std::endl;
 
     // Print client list
     std::cout << "\nClients             | State" << std::endl;
     std::cout << "-------------------------------------------" << std::endl;
-    for(ClientSession client : clients) {
+    for (ClientSession client : clients) {
         std::cout << std::setw(20) << client.cert.subjectName << "| ";
         std::cout << std::setw(20) << clientStateStrings[client.state + 2] << std::endl;
     }
 
     // Print log file if it is not empty
     std::ifstream f(logName);
-    if (f.peek() != std::ifstream::traits_type::eof())
-    {
+    if (f.peek() != std::ifstream::traits_type::eof()) {
         std::cout << std::endl << f.rdbuf();
     }
 }
@@ -189,8 +182,7 @@ void Server::printClients(void)
 /* Server::Private */
 
 
-int Server::verifyClientCert(std::string msg, ClientSession &client)
-{
+int Server::verifyClientCert(std::string msg, ClientSession &client) {
     int nBytes;
     bool isVerified;
 
@@ -224,8 +216,7 @@ int Server::verifyClientCert(std::string msg, ClientSession &client)
     return 0;
 }
 
-int Server::sendServerCert(ClientSession &client)
-{   
+int Server::sendServerCert(ClientSession &client) {
     int nBytes;
 
     // 2 Send server certificate and a challenge
@@ -239,16 +230,15 @@ int Server::sendServerCert(ClientSession &client)
     serverAuth.sign(privateKey);
 
     nBytes = serverAuth.sendMSG(client.socket);
-    if (nBytes == 0) { 
+    if (nBytes == 0) {
         std::cerr << "Server certificate could not be sent" << std::endl;
-        return 1; 
+        return 1;
     }
 
     return 0;
 }
 
-int Server::verifyClientResponse(std::string msg, ClientSession &client)
-{
+int Server::verifyClientResponse(std::string msg, ClientSession &client) {
     int nBytes;
     bool isVerified;
     std::string clientChallenge, clientResponse;
@@ -297,11 +287,9 @@ int Server::verifyClientResponse(std::string msg, ClientSession &client)
     return 0;
 }
 
-int Server::sendClientUpdate(void)
-{   
-    for(ClientSession &client : clients) {
-        if(client.state == connected)
-        {
+int Server::sendClientUpdate(void) {
+    for (ClientSession &client : clients) {
+        if (client.state == connected) {
             sendClientSessions(client);
         }
     }
@@ -309,19 +297,17 @@ int Server::sendClientUpdate(void)
     return 0;
 }
 
-int Server::sendClientSessions(ClientSession &recipient)
-{
+int Server::sendClientSessions(ClientSession recipient) {
     int nBytes;
 
-    for(ClientSession &client : clients) {
-        if (client.cert.subjectName != recipient.cert.subjectName)
-        {
+    for (ClientSession &client : clients) {
+        if (client.cert.subjectName != recipient.cert.subjectName) {
             CertMSG serverMsg(client.cert);
             AppMSG serverAuth(&serverMsg, cert.subjectName, recipient.cert.subjectName);
             serverAuth.sign(privateKey);
 
             nBytes = serverAuth.sendMSG(recipient.socket);
-            if (nBytes == 0) { 
+            if (nBytes == 0) {
                 std::cerr << "Client certificate could not be sent" << std::endl;
                 return 1;
             }
@@ -331,8 +317,7 @@ int Server::sendClientSessions(ClientSession &recipient)
     return 0;
 }
 
-int Server::echoMessage(std::string msg)
-{
+int Server::echoMessage(std::string msg) {
     int nBytes, err;
     bool isVerified;
 
@@ -343,8 +328,7 @@ int Server::echoMessage(std::string msg)
     clientMsg.deserialize(msg);
 
     // Perform an authenticated integrity check
-    if (clientMsg.type != "ChatMSG")
-    {
+    if (clientMsg.type != "ChatMSG") {
         getClientSession(clientMsg.source, sender);
         isVerified = clientMsg.verify(sender.cert.publicKey);
         if (isVerified == false) {
@@ -355,47 +339,38 @@ int Server::echoMessage(std::string msg)
 
     Logger("Received " + clientMsg.type + ", source: " + clientMsg.source + ", destination: " + clientMsg.destination, logName);
 
-    // If the destination is not specified, broadcast the message to everyone except the source
-    if (clientMsg.destination.empty())
-    {
-        for(ClientSession &client : clients) 
-        {
-            if (client.cert.subjectName != clientMsg.source)
-            {
+    if (clientMsg.destination.empty()) {
+        // If the destination is not specified, broadcast the message to everyone except the source
+        for (ClientSession &client : clients)  {
+            if (client.cert.subjectName != clientMsg.source) {
                 nBytes = clientMsg.sendMSG(client.socket);
-                if (nBytes == 0) { 
+                if (nBytes == 0) {
                     std::cerr << "Client message could not be echoed" << std::endl;
                     return 1;
                 }
             }
         }
-    }
-    // If the destination is specified, send to that specific client only
-    else 
-    {
+    } else  {
+        // If the destination is specified, send to that specific client only
         err = getClientSession(clientMsg.destination, recipient);
-        if(err != 0)
-        {
+        if (err != 0) {
             std::cerr << "The destination for message is unknown to the server" << std::endl;
             return 1;
         }
 
         nBytes = clientMsg.sendMSG(recipient.socket);
-        if (nBytes == 0) { 
+        if (nBytes == 0) {
             std::cerr << "Client message could not be echoed" << std::endl;
             return 1;
         }
     }
-    
 
     return 0;
 }
 
-int Server::getClientSession(std::string subjectName, ClientSession &session)
-{
-    for(ClientSession &client : clients) {
-        if(client.cert.subjectName == subjectName)
-        {
+int Server::getClientSession(std::string subjectName, ClientSession &session) {
+    for (ClientSession &client : clients) {
+        if (client.cert.subjectName == subjectName) {
             session = client;
             return 0;
         }
@@ -408,8 +383,7 @@ int Server::getClientSession(std::string subjectName, ClientSession &session)
 /* Main */
 
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
     int err, nBytes;
 
     // Clear log file
@@ -428,10 +402,9 @@ int main(int argc, char* argv[])
     err = server.start(serverIP, port);
     if (err != 0) { return 1; }
 
-    while(true)
-    {
-        server.readClientConnections(CACert);	//Handle any connection requests
-        err = server.readClients();		        //Receive data from clients
+    while (true) {
+        server.readClientConnections(CACert);   // Handle any connection requests
+        err = server.readClients();             // Receive data from clients
         if (err != 0) { return 1; }
     }
 
