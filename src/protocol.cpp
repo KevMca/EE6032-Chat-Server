@@ -5,7 +5,7 @@
 // Sources:
 //
 
-#include "./protocol.h"
+#include "../include/protocol.h"
 
 
 /* BaseMSG */

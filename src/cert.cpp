@@ -13,8 +13,8 @@
 #include <cryptopp/osrng.h>
 
 // Local includes
-#include "./cert.h"
-#include "./encryption.h"
+#include "../include/cert.h"
+#include "../include/encryption.h"
 
 /* Constructors */
 

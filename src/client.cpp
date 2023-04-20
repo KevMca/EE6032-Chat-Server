@@ -7,7 +7,7 @@
 // https://www.cryptopp.com/wiki/RSA_Cryptography
 
 #include "./client.h"
-#include "./logging.h"
+#include "../include/logging.h"
 
 /* Parameters */
 

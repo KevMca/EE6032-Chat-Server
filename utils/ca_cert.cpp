@@ -10,7 +10,7 @@
 #include <cryptopp/pssr.h>
 
 // Local includes
-#include "../cert.h"
+#include "../include/cert.h"
 
 int main(int argc, char* argv[])
 {

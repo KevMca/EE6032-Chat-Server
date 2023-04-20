@@ -4,7 +4,7 @@
 // Sources:
 // tro's answer from: https://stackoverflow.com/questions/7400418/writing-a-log-file-in-c-c
 
-#include "./logging.h"
+#include "../include/logging.h"
 
 std::string getCurrentDateTime(void) {
     time_t now = time(0);

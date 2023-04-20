@@ -4,7 +4,7 @@
 // Sources:
 //
 
-#include "./encryption.h"
+#include "../include/encryption.h"
 
 std::string Encryption::generatePartialKey(size_t size) {
     using namespace CryptoPP;

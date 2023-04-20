@@ -29,8 +29,8 @@
 #include <vector>
 #include <string>
 
-#include "./cert.h"
-#include "./protocol.h"
+#include "../include/cert.h"
+#include "../include/protocol.h"
 
 char *clientStateStrings[] = {
     "unverified",

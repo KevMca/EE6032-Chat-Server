@@ -4,10 +4,10 @@ project(chatserver)
 
 find_package(cryptopp REQUIRED)
 
-set(SRCS cert.cpp encryption.cpp protocol.cpp logging.cpp)
+set(SRCS src/cert.cpp src/encryption.cpp src/protocol.cpp src/logging.cpp)
 
-add_executable(server server.cpp ${SRCS})
-add_executable(client client.cpp ${SRCS})
+add_executable(server src/server.cpp ${SRCS})
+add_executable(client src/client.cpp ${SRCS})
 add_executable(ca_cert utils/ca_cert.cpp ${SRCS})
 add_executable(client_cert utils/client_cert.cpp ${SRCS})
 

@@ -33,8 +33,8 @@
 #include <vector>
 #include <string>
 
-#include "./cert.h"
-#include "./protocol.h"
+#include "../include/cert.h"
+#include "../include/protocol.h"
 
 // Client session class for other clients connected to the server
 // Example:

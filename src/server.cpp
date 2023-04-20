@@ -8,7 +8,7 @@
 // https://www.daniweb.com/programming/software-development/threads/6811/winsock-multi-client-servers
 
 #include "./server.h"
-#include "./logging.h"
+#include "../include/logging.h"
 
 
 /* Parameters */

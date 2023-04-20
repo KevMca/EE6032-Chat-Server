@@ -28,8 +28,8 @@
 #include <cassert>
 #include <string>
 
-#include "./cert.h"
-#include "./encryption.h"
+#include "../include/cert.h"
+#include "../include/encryption.h"
 
 #define DEFAULT_BUFLEN 4096
 
