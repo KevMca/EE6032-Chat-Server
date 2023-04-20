@@ -13,7 +13,7 @@
     │   ├── logging.h
     │   ├── protocol.h
     ├── logs                # Contains log files for server and client applications
-    ├── src
+    ├── src                 # Source files for includes and main applications
     │   ├── cert.cpp        # Custom certificate code
     │   ├── client.cpp      # Client application
     │   ├── client.h
